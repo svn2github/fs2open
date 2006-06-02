@@ -1,0 +1,48 @@
+Microsoft Visual Studio Solution File, Format Version 8.00
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Freespace2", "Freespace2.vcproj", "{B272C104-42CE-4883-AF46-6A332AE736C8}"
+	ProjectSection(ProjectDependencies) = postProject
+		{ED0E5D2C-C052-4127-B692-1A6F4998ED12} = {ED0E5D2C-C052-4127-B692-1A6F4998ED12}
+		{9A67F8C0-B10E-421B-8DEE-5C6AEC4FFE18} = {9A67F8C0-B10E-421B-8DEE-5C6AEC4FFE18}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "code", "code.vcproj", "{9A67F8C0-B10E-421B-8DEE-5C6AEC4FFE18}"
+	ProjectSection(ProjectDependencies) = postProject
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libjpeg", "libjpeg.vcproj", "{ED0E5D2C-C052-4127-B692-1A6F4998ED12}"
+	ProjectSection(ProjectDependencies) = postProject
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "wxFRED2", "wxFRED2.vcproj", "{CF644D1B-B9A3-4432-A148-84C7E1478187}"
+	ProjectSection(ProjectDependencies) = postProject
+		{9A67F8C0-B10E-421B-8DEE-5C6AEC4FFE18} = {9A67F8C0-B10E-421B-8DEE-5C6AEC4FFE18}
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfiguration) = preSolution
+		Debug = Debug
+		Release = Release
+	EndGlobalSection
+	GlobalSection(ProjectConfiguration) = postSolution
+		{B272C104-42CE-4883-AF46-6A332AE736C8}.Debug.ActiveCfg = Debug|Win32
+		{B272C104-42CE-4883-AF46-6A332AE736C8}.Debug.Build.0 = Debug|Win32
+		{B272C104-42CE-4883-AF46-6A332AE736C8}.Release.ActiveCfg = Release|Win32
+		{B272C104-42CE-4883-AF46-6A332AE736C8}.Release.Build.0 = Release|Win32
+		{9A67F8C0-B10E-421B-8DEE-5C6AEC4FFE18}.Debug.ActiveCfg = Debug|Win32
+		{9A67F8C0-B10E-421B-8DEE-5C6AEC4FFE18}.Debug.Build.0 = Debug|Win32
+		{9A67F8C0-B10E-421B-8DEE-5C6AEC4FFE18}.Release.ActiveCfg = Release|Win32
+		{9A67F8C0-B10E-421B-8DEE-5C6AEC4FFE18}.Release.Build.0 = Release|Win32
+		{ED0E5D2C-C052-4127-B692-1A6F4998ED12}.Debug.ActiveCfg = Debug|Win32
+		{ED0E5D2C-C052-4127-B692-1A6F4998ED12}.Debug.Build.0 = Debug|Win32
+		{ED0E5D2C-C052-4127-B692-1A6F4998ED12}.Release.ActiveCfg = Release|Win32
+		{ED0E5D2C-C052-4127-B692-1A6F4998ED12}.Release.Build.0 = Release|Win32
+		{CF644D1B-B9A3-4432-A148-84C7E1478187}.Debug.ActiveCfg = Debug|Win32
+		{CF644D1B-B9A3-4432-A148-84C7E1478187}.Debug.Build.0 = Debug|Win32
+		{CF644D1B-B9A3-4432-A148-84C7E1478187}.Release.ActiveCfg = Release|Win32
+		{CF644D1B-B9A3-4432-A148-84C7E1478187}.Release.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+	EndGlobalSection
+	GlobalSection(ExtensibilityAddIns) = postSolution
+	EndGlobalSection
+EndGlobal
