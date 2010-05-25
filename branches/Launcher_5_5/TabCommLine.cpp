@@ -3,6 +3,8 @@
 
 #include <io.h>
 #include <direct.h>
+#include <iostream>
+#include <sstream>
 
 #include "stdafx.h"
 #include "Launcher.h"
@@ -116,10 +118,8 @@ EasyFlag *easy_flags  = NULL;
 Flag	 *exe_params  = NULL;
 bool	 *flag_states = NULL;
 
-#define MAX_CMDLINE_SIZE		3000
-#define MAX_CUSTOM_PARAM_SIZE	1200
+std::ostringstream command_line;
 
-char command_line[MAX_CMDLINE_SIZE]   = "";
 
 /////////////////////////////////////////////////////////////////////////////
 // CTabCommLine dialog
@@ -183,54 +183,49 @@ BOOL CTabCommLine::OnInitDialog()
  */
 void CTabCommLine::UpdateFields()
 {
+	std::string params;
+
 	if(Settings::exe_path_valid == false)
 	{
 		GetDlgItem(IDC_COMM_LINE_PATH)->SetWindowText("");
 		return;
 	}
 
-	strcpy(command_line, Settings::exe_filepath);
+	command_line.str("");
+
+	command_line << Settings::exe_filepath;
 
 	if (Settings::exe_type != EXE_TYPE_CUSTOM) {
 		GetDlgItem(IDC_SETTINGS_NORMAL)->EnableWindow(FALSE);
 		GetDlgItem(IDC_SETTINGS_MOD)->EnableWindow(FALSE);
-		GetDlgItem(IDC_COMM_LINE_PATH)->SetWindowText(command_line);   
+		GetDlgItem(IDC_COMM_LINE_PATH)->SetWindowText(command_line.str().c_str());
 		CLauncherDlg::Redraw();
 		return;
 	}
 
-	char mod_param[MAX_PATH * 3];
-	tab_mod.GetModCommandLine(mod_param);
-	if(strlen(mod_param) > 0)
-	{
- 		strcat(command_line, mod_param);
+	tab_mod.GetModCommandLine(params);
+	if ( !params.empty() ) {
+		command_line << params;
 		GetDlgItem(IDC_SETTINGS_NORMAL)->EnableWindow(TRUE);
 		GetDlgItem(IDC_SETTINGS_MOD)->EnableWindow(TRUE);
-	}
-	else
-	{
+	} else {
 		GetDlgItem(IDC_SETTINGS_NORMAL)->EnableWindow(FALSE);
 		GetDlgItem(IDC_SETTINGS_MOD)->EnableWindow(FALSE);
 	}
 
-	char standard_param[MAX_PATH * 3];
-	UpdateStandardParam(standard_param);	
-	if(strlen(standard_param) > 0)
-	{
- 		strcat(command_line, " ");
- 		strcat(command_line, standard_param);
+	UpdateStandardParam(params);
+	if ( !params.empty() ) {
+		command_line << " " << params;
 	}
 
 	CString custom_param;
 	GetDlgItem(IDC_CUSTOM_PARAM)->GetWindowText(custom_param);
-	if(strlen(custom_param) > 0)
-	{
- 		strcat(command_line, " ");
- 		strcat(command_line, custom_param);
+	if(strlen(custom_param) > 0) {
+		command_line << " " << ((const char *)custom_param);
 	}
 
 
-	GetDlgItem(IDC_COMM_LINE_PATH)->SetWindowText(command_line);   
+	GetDlgItem(IDC_COMM_LINE_PATH)->SetWindowText(command_line.str().c_str());
 	CLauncherDlg::Redraw();
 }
 
@@ -248,7 +243,7 @@ void CTabCommLine::OnChangeCustomParam()
  */
 CString CTabCommLine::GetCommLine()
 {
-	return CString(command_line);
+	return CString(command_line.str().c_str());
 }
 
 /**
@@ -319,16 +314,16 @@ void CTabCommLine::OnItemchangedFlagList(NMHDR* pNMHDR, LRESULT* pResult)
 /**
  * This takes the standard parameter choices the user has made and turns them into a string
  */
-void CTabCommLine::UpdateStandardParam(char *standard_param)
+void CTabCommLine::UpdateStandardParam(std::string &params)
 {
-	strcpy(standard_param, "");
+	params.erase();
 
 	for(int i = 0; i < num_params; i++)
 	{
 		if(flag_states[i] == true)
 		{
-			strcat(standard_param, exe_params[i].name);		
-			strcat(standard_param, " ");		
+			params.append(exe_params[i].name);
+			params.append(" ");	
 		}
 	}	 
 }
@@ -583,27 +578,28 @@ bool CTabCommLine::SaveSettings()
 {
 	FILE *fp = NULL;
 	char path_buffer[MAX_PATH];
-	char standard_param[MAX_PATH];
-	char mod_param[MAX_PATH];
-	char custom_param[MAX_CUSTOM_PARAM_SIZE] = {'\0'};
+	char mod_name[MAX_PATH];
+	std::string params;
+	std::ostringstream custom_param;
+	CString c_params;
 
-	GetDlgItem(IDC_CUSTOM_PARAM)->GetWindowText(custom_param, MAX_CUSTOM_PARAM_SIZE);
+	GetDlgItem(IDC_CUSTOM_PARAM)->GetWindowText(c_params);
+	custom_param << ((const char*)c_params);
 
-	UpdateStandardParam(standard_param);
+	UpdateStandardParam(params);
+
+	if ( !params.empty() ) {
+		custom_param << " " << params;
+	}
 
 	check_cfg_file(path_buffer, true);
 
 	// if not a custom exe then it must be a retail exe, in which case just save to the cfg
 	if ( Settings::exe_type != EXE_TYPE_CUSTOM ) {
-		if (strlen(standard_param) > 0) {
-			strcat(custom_param, " ");
-			strcat(custom_param, standard_param);
-		}
-	
 		fp = fopen(path_buffer, "wt");
 			
 		if (fp) {
-			fwrite(custom_param, strlen(custom_param) * sizeof(char), 1, fp);
+			fwrite(custom_param.str().c_str(), custom_param.str().length() * sizeof(char), 1, fp);
 			fclose(fp);
 			fp = NULL;
 		}
@@ -611,19 +607,15 @@ bool CTabCommLine::SaveSettings()
 		return true;
 	}
 
-	tab_mod.SetSettings(standard_param);
-	tab_mod.GetActiveModName(mod_param);
-
-	if (strlen(standard_param) > 0) {
-		strcat(custom_param, " ");
-		strcat(custom_param, standard_param);
-	}
+	tab_mod.SetSettings(params);
 
 	dictionary *ini = iniparser_create(Settings::ini_main);
 
 	if (ini) {
-		iniparser_setstr(ini, "launcher:game_flags", custom_param);
-		iniparser_setstr(ini, "launcher:active_mod", mod_param);
+		tab_mod.GetActiveModName(mod_name);
+
+		iniparser_setstr(ini, "launcher:game_flags", (char *)custom_param.str().c_str());
+		iniparser_setstr(ini, "launcher:active_mod", mod_name);
 
 		iniparser_save(Settings::ini_main, ini);
 		iniparser_freedict(ini);
@@ -631,16 +623,14 @@ bool CTabCommLine::SaveSettings()
 	}
 
 	// Write the mod details for the cfg file
-	tab_mod.GetModCommandLine(mod_param);		
-	if (strlen(mod_param) > 0) {
-		strcat(custom_param, mod_param);
-	}
+	tab_mod.GetModCommandLine(params);
+	custom_param << params;
 
 	// Make the cfg file
 	fp = fopen(path_buffer, "wt");
 
 	if (fp) {
-		fwrite(custom_param, strlen(custom_param) * sizeof(char), 1, fp);
+		fwrite(custom_param.str().c_str(), custom_param.str().length() * sizeof(char), 1, fp);
 		fclose(fp);
 	}
 
@@ -660,7 +650,7 @@ int CTabCommLine::GetFlags()
 
 void CTabCommLine::LoadSettings(char *reg_path)
 {
-	char custom_param[MAX_CUSTOM_PARAM_SIZE] = "";
+	char *custom_param = NULL;
 
 	// a non-retail exe will grab options from the launcher ini
 	if (Settings::exe_type == EXE_TYPE_CUSTOM) {
@@ -668,8 +658,9 @@ void CTabCommLine::LoadSettings(char *reg_path)
 
 		dictionary *ini = iniparser_load(Settings::ini_main);
 
-		if (ini == NULL) 
+		if (ini == NULL) {
 			return;
+		}
 
 		iniparser_dump(ini, stderr);
 	
@@ -680,8 +671,13 @@ void CTabCommLine::LoadSettings(char *reg_path)
 
 		char *flags	= iniparser_getstr(ini, "launcher:game_flags");
 
-		if (flags)
-			strcpy(custom_param, flags);
+		if (flags) {
+			custom_param = (char*)malloc(strlen(flags)+1 * sizeof(char));
+
+			if (custom_param != NULL) {
+				strcpy(custom_param, flags);
+			}
+		}
 
 		iniparser_freedict(ini);
 	}
@@ -695,50 +691,65 @@ void CTabCommLine::LoadSettings(char *reg_path)
 		fp = fopen(path_buffer, "rt");
 			
 		if (fp) {
-			fgets(custom_param, sizeof(custom_param) - 1, fp);
+			int size = get_file_size(path_buffer) + 1;
+			if (size > 0) {
+				custom_param = (char*)malloc(size * sizeof(char));
+			}
+
+			if (custom_param != NULL) {
+				fgets(custom_param, size, fp);
+			}
+
 			fclose(fp);
 			fp = NULL;
 		}
 	}
 
-	char *end_string_here = NULL;
-	char *found_str = NULL;
-	size_t get_new_offset = 0;
+	if (custom_param != NULL) {
+		char *end_string_here = NULL;
+		char *found_str = NULL;
+		size_t get_new_offset = 0;
 
-	// Seperate custom flags from standard one
-	for(int i = 0; i < num_params; i++) {
-		// while going through the cmdline make sure to grab only the option that we
-		// are looking for, but if one similar then keep searching for the exact match
-		do {
-			found_str = strstr(&custom_param[0] + get_new_offset, exe_params[i].name);
+		// Seperate custom flags from standard one
+		for(int i = 0; i < num_params; i++) {
+			// while going through the cmdline make sure to grab only the option that we
+			// are looking for, but if one similar then keep searching for the exact match
+			do {
+				found_str = strstr(custom_param + get_new_offset, exe_params[i].name);
 
-			if (found_str && (*(found_str + strlen(exe_params[i].name))) && (*(found_str + strlen(exe_params[i].name)) != ' ') ) {
-				// the new offset should be our current location + the length of the current option
-				get_new_offset = (strlen(custom_param) - strlen(found_str) + strlen(exe_params[i].name));
-			} else {
-				get_new_offset = 0;
-			}
-		} while ( get_new_offset );
+				if (found_str && (*(found_str + strlen(exe_params[i].name))) && (*(found_str + strlen(exe_params[i].name)) != ' ') ) {
+					// the new offset should be our current location + the length of the current option
+					get_new_offset = (strlen(custom_param) - strlen(found_str) + strlen(exe_params[i].name));
+				} else {
+					get_new_offset = 0;
+				}
+			} while ( get_new_offset );
 
-		if (found_str == NULL)
-			continue;
+			if (found_str == NULL)
+				continue;
 
-		flag_states[i] = true;
+			flag_states[i] = true;
 
-		if (end_string_here == NULL)
-			end_string_here = found_str;
-	}
-
-	// Cut the standard options out of the custom string
-	if (end_string_here != NULL) {
-	   	if (end_string_here > custom_param && end_string_here[-1] == ' ') {
-			end_string_here[-1] = '\0';
-		} else {
-			end_string_here[0] = '\0';
+			if (end_string_here == NULL)
+				end_string_here = found_str;
 		}
+
+		// Cut the standard options out of the custom string
+		if (end_string_here != NULL) {
+		   	if (end_string_here > custom_param && end_string_here[-1] == ' ') {
+				end_string_here[-1] = '\0';
+			} else {
+				end_string_here[0] = '\0';
+			}
+		}
+
+		GetDlgItem(IDC_CUSTOM_PARAM)->SetWindowText(custom_param);
+
+		free(custom_param);
+	} else {
+		GetDlgItem(IDC_CUSTOM_PARAM)->SetWindowText("");
 	}
 
-	GetDlgItem(IDC_CUSTOM_PARAM)->SetWindowText(custom_param);
 	UpdateFlagList();
 }	  
 

@@ -113,16 +113,18 @@ void CTabRegOptions::InsertItem(char *name, int type, void *data, DWORD size)
 				m_reg_option_list.SetItem(&item);
 				break;
 			case REG_TYPE_DWORD:
-				buffer = new char[size+2];
+				buffer = (char*)malloc(size+2);
 				if (buffer == NULL)
 				{
 					break;
 				}
+				memset(buffer, 0, size+2);
 				// Restrict the data copy to passed "size" rather than the actual size of "buffer"
-				_snprintf(buffer, size, "%d", *(DWORD *) data);
+				// (don't forget to account for nul char though)
+				_snprintf(buffer, size+1, "%d", *(DWORD *) data);
 				item.pszText = buffer;
 				m_reg_option_list.SetItem(&item);
-				delete[] buffer;
+				free(buffer);
 				break;
 			case REG_TYPE_UNSUPPORTED: break;
 		}
@@ -187,13 +189,15 @@ void CTabRegOptions::FillRegList()
 				break;
 			}
 
-			pdata = new BYTE[data_len+2];
+			pdata = (BYTE*)malloc(data_len+2);
 
 			if (pdata == NULL)
 			{
 				MessageBox("An error has occured reading from the registry; cancelling...");
 				break;
 			}
+
+			memset(pdata, 0, data_len+2);
 		} // end cheap data space check
 
 		// account for the NULL char, otherwise we lose the last character of the key name
@@ -211,13 +215,13 @@ void CTabRegOptions::FillRegList()
 
 		if(result == ERROR_NO_MORE_ITEMS)
 		{
-			delete[] pdata;
+			free(pdata);
 			break;
 		}
 
 		if(result != ERROR_SUCCESS && result != ERROR_NO_MORE_ITEMS && result != ERROR_MORE_DATA)
 		{
-			delete[] pdata;
+			free(pdata);
 			MessageBox("An error has occured reading from the registry; cancelling...");
 			break;
 		}
@@ -231,7 +235,7 @@ void CTabRegOptions::FillRegList()
 		}
 
 		InsertItem(subkey_name, reg_type, (void *) pdata, data_len);
-		delete[] pdata;
+		free(pdata);
 		count++;
 
 	} while(1);

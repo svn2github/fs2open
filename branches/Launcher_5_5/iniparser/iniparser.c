@@ -499,13 +499,14 @@ void iniparser_save(char * ininame, dictionary * ini)
 dictionary * iniparser_load(char * ininame)
 {
     dictionary  *   d ;
-    char        lin[ASCIILINESZ+1];
+    char    *   lin ;
     char        sec[ASCIILINESZ+1];
     char        key[ASCIILINESZ+1];
-    char        val[ASCIILINESZ+1];
+    char    *   val ;
     char    *   where ;
     FILE    *   ini ;
     int         lineno ;
+    int         max_length ;
 
     if ((ini=fopen(ininame, "r"))==NULL) {
         return NULL ;
@@ -513,12 +514,31 @@ dictionary * iniparser_load(char * ininame)
 
     sec[0]=0;
 
+    fseek(ini, 0, SEEK_END);
+    max_length = ftell(ini) + 1;
+    fseek(ini, 0, SEEK_SET);
+
+    lin = malloc(max_length * sizeof(char));
+
+    if (lin == NULL) {
+        fclose(ini);
+        return NULL;
+    }
+
+    val = malloc(max_length * sizeof(char));
+
+    if (val == NULL) {
+        free(lin);
+        fclose(ini);
+        return NULL;
+    }
+
     /*
      * Initialize a new dictionary entry
      */
     d = dictionary_new(0);
     lineno = 0 ;
-    while (fgets(lin, ASCIILINESZ, ini)!=NULL) {
+    while (fgets(lin, max_length, ini)!=NULL) {
         lineno++ ;
         where = strskp(lin); /* Skip leading spaces */
         if (*where==';' || *where=='#' || *where==0)
@@ -546,6 +566,8 @@ dictionary * iniparser_load(char * ininame)
         }
     }
     fclose(ini);
+    free(lin);
+    free(val);
     return d ;
 }
 

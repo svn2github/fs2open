@@ -7,6 +7,8 @@
 // TabCommLine.h : header file
 //
 
+#include <string>
+
 enum
 {
 	// First 6 flags must remain set they are
@@ -51,7 +53,7 @@ public:
 	void LoadSettings(char *reg_path);
 	void ConstructFlagList();
 	void ConstructFlagListRetail();
-	void UpdateStandardParam(char *standard_param);
+	void UpdateStandardParam(std::string &params);
 	int GetFlags();
 	void SelectRegPathAndExeType();
 

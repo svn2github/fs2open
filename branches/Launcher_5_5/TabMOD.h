@@ -7,6 +7,8 @@
 // TabMOD.h : header file
 //
 
+#include <string>
+
 /////////////////////////////////////////////////////////////////////////////
 // CTabMOD dialog
 
@@ -16,10 +18,10 @@ class CTabMOD : public CDialog
 public:
 	CTabMOD(CWnd* pParent = NULL);   // standard constructor
 	void SetMOD(char *absolute_path); 
-	void GetModCommandLine(char *result);
+	void GetModCommandLine(std::string &result);
 	void GetActiveModName(char *result);
 
-	void  SetSettings(char *flags); 
+	void  SetSettings(const std::string &flags);
 	char *GetSettings(bool defaultSettings = false); 
 
 	void OnApply(int flags);

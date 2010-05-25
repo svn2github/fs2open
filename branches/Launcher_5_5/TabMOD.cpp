@@ -112,7 +112,7 @@ void CTabMOD::OnModSelect()
 	tab_comm_line.SetModParam(relative_path);
 }
 
-void CTabMOD::SetSettings(char *flags) 
+void CTabMOD::SetSettings(const std::string &flags)
 {
 	if(mod_selected == false)
 	{
@@ -134,7 +134,7 @@ void CTabMOD::SetSettings(char *flags)
 
 	ini_write_type(ini, "[settings]");
 	ini_write_comment(ini, "These are the user's settings; don't distribute them with the mod because he'll want to choose his own");
-	ini_write_data(ini, "flags", flags);
+	ini_write_data(ini, "flags", (char *)flags.c_str());
 
 	ini_close(ini);
 }
@@ -357,41 +357,43 @@ void CTabMOD::GetActiveModName(char *result)
 	strcpy(result, m_active_mod_name);
 }
  
-void CTabMOD::GetModCommandLine(char *result)
+void CTabMOD::GetModCommandLine(std::string &result)
 {
  	char active_mod[MAX_PATH];
+
+	result.erase();
+
 	GetActiveModName(active_mod);
 
 	if(strlen(active_mod) == 0)
 	{
-		*result = '\0';
 		return;
 	}
 
 	bool need_comma = false;
-	strcpy(result, " -mod "); 
+	result.append(" -mod ");
 
 	if(ini_text[INI_MOD_PRI] && strlen(ini_text[INI_MOD_PRI]) > 0)
 	{
 		if (ini_text[INI_MOD_PRI][0] == ',') {
-			strcat(result, ini_text[INI_MOD_PRI]+1);
+			result.append(ini_text[INI_MOD_PRI]+1);
 		} else {
-			strcat(result, ini_text[INI_MOD_PRI]);
+			result.append(ini_text[INI_MOD_PRI]);
 		}
-		strcat(result, ",");
+		result.append(",");
 	}
 
 	{
-		strcat(result, active_mod); 
+		result.append(active_mod);
 	}
 
 	if(ini_text[INI_MOD_SEC] && strlen(ini_text[INI_MOD_SEC]) > 0)
 	{
-		strcat(result, ",");
+		result.append(",");
 		if (ini_text[INI_MOD_SEC][0] == ',') {
-			strcat(result, ini_text[INI_MOD_SEC]+1);
+			result.append(ini_text[INI_MOD_SEC]+1);
 		} else {
-			strcat(result, ini_text[INI_MOD_SEC]);
+			result.append(ini_text[INI_MOD_SEC]);
 		}
 	}
 
