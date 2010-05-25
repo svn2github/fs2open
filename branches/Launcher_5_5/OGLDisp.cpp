@@ -5,6 +5,7 @@
 #include "launcher.h"
 #include "OGLDisp.h"
 #include <vector>
+#include <algorithm>
 
 #include "win32func.h"
 #include "settings.h"
@@ -25,6 +26,8 @@ typedef struct
 } ModeOGL;
 
 using std::vector;
+using std::sort;
+
 vector<ModeOGL> ogl_modes;
 
 static int aniso_value[6] = { 0, 1, 2, 4, 8, 16 };
@@ -74,6 +77,19 @@ END_MESSAGE_MAP()
 /////////////////////////////////////////////////////////////////////////////
 // COGLDisp message handlers
 
+static bool ogl_modes_sort_func(const ModeOGL &m1, const ModeOGL &m2)
+{
+	if (m1.xres < m2.xres) {
+		return true;
+	}
+
+	if (m1.yres < m2.yres) {
+		return true;
+	}
+
+	return false;
+}
+
 BOOL COGLDisp::OnInitDialog() 
 {
 	ModeOGL mogl;
@@ -95,6 +111,12 @@ BOOL COGLDisp::OnInitDialog()
 			continue;
 		if (mogl.yres < 480)
 			continue;
+		if ( (mogl.xres < 1024) && !((mogl.xres == 640) || (mogl.xres == 800)) )
+			continue;
+		if (mogl.xres == 640 && mogl.yres != 480)
+			continue;
+		if (mogl.xres == 800 && mogl.yres != 600)
+			continue;
 		if (mogl.cdepth < 16)
 			continue;
 
@@ -114,6 +136,7 @@ BOOL COGLDisp::OnInitDialog()
 		ogl_modes.push_back(mogl);
 	}
 
+	sort(ogl_modes.begin(), ogl_modes.end(), ogl_modes_sort_func);
 	
 	color_depth[0].cdepth = 16;
 	strcpy(color_depth[0].text, "16-bit");
@@ -210,13 +233,6 @@ void COGLDisp::UpdateResList(unsigned int requested_width, unsigned int requeste
 		if (ogl_modes[i].cdepth != requested_cdepth)
 			continue;
 
-		// skip anything below the minimum
-		if(	!(ogl_modes[i].xres == 640 && ogl_modes[i].yres == 480) &&
-			(ogl_modes[i].xres < 800 || ogl_modes[i].yres < 600))
-		{
-		  	continue;
-		}
-
 		char mode_string[128];
 		sprintf(mode_string, "%d x %d", ogl_modes[i].xres, ogl_modes[i].yres);
 
@@ -227,7 +243,6 @@ void COGLDisp::UpdateResList(unsigned int requested_width, unsigned int requeste
 		if( requested_width  == ogl_modes[i].xres &&
 			requested_height == ogl_modes[i].yres &&
 			requested_cdepth == ogl_modes[i].cdepth)
-
 		{
 	   		selected_sel = count;
 
