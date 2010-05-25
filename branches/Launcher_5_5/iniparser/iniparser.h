@@ -250,6 +250,18 @@ int iniparser_find_entry(dictionary * ini, char * entry) ;
 
 /*-------------------------------------------------------------------------*/
 /**
+  @brief    Save an ini file
+  @param    ininame Name of the ini file to read.
+  @param    ini     Dictionary to save
+
+  This is the save for ini files. This function is called, providing
+  the name of the file to be saved.
+ */
+/*--------------------------------------------------------------------------*/
+void iniparser_save(char * ininame, dictionary * ini);
+
+/*-------------------------------------------------------------------------*/
+/**
   @brief    Parse an ini file and return an allocated dictionary object
   @param    ininame Name of the ini file to read.
   @return   Pointer to newly allocated dictionary
@@ -263,6 +275,24 @@ int iniparser_find_entry(dictionary * ini, char * entry) ;
  */
 /*--------------------------------------------------------------------------*/
 dictionary * iniparser_load(char * ininame);
+
+/*-------------------------------------------------------------------------*/
+/**
+  @brief    Create dictionary
+  @param    ininame Name of the ini file to read.
+  @return   Pointer to newly allocated dictionary
+
+  This is the creator for ini files. This function is called, providing
+  the name of the file to be read. It returns a dictionary object that
+  should not be accessed directly, but through accessor functions
+  instead.  If the file exists the dictionary will be populated with
+  it's values.  If the file does not exist a blank dictionary will
+  be returned.
+
+  The returned dictionary must be freed using iniparser_freedict().
+ */
+/*--------------------------------------------------------------------------*/
+dictionary * iniparser_create(char * ininame);
 
 /*-------------------------------------------------------------------------*/
 /**

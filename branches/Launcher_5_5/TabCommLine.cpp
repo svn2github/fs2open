@@ -616,14 +616,15 @@ bool CTabCommLine::SaveSettings()
 		strcat(custom_param, standard_param);
 	}
 
-	fp = ini_open_for_write(Settings::ini_main, true, NULL);
+	dictionary *ini = iniparser_create(Settings::ini_main);
 
-	if (fp) {
-		ini_write_data(fp, "game_flags", custom_param);
-		ini_write_data(fp, "active_mod", mod_param);
+	if (ini) {
+		iniparser_setstr(ini, "launcher:game_flags", custom_param);
+		iniparser_setstr(ini, "launcher:active_mod", mod_param);
 
-		ini_close(fp);
-		fp = NULL;
+		iniparser_save(Settings::ini_main, ini);
+		iniparser_freedict(ini);
+		ini = NULL;
 	}
 
 	// Write the mod details for the cfg file
