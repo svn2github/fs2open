@@ -28,8 +28,13 @@ public:
 	static char flags_default_mod[10240];
 	static char flags_custom_mod[10240];
 
-	static void is_openal(bool value);
-	static bool openal_build;
+	static void set_build_flags(int flags);
+	static bool is_openal_build();
+	static bool is_no_d3d_build();
+	static bool is_new_sound_build();
+
+private:
+	static int build_flags;
 };
 
 #endif

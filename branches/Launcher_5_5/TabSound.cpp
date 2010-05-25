@@ -33,12 +33,21 @@ char *sound_card_modes[NUM_SND_MODES] =
 typedef struct ALCdevice_struct ALCdevice;
 typedef char ALCchar;
 typedef int ALCenum;
+typedef char ALCboolean;
+#define ALC_FALSE		0
+#define ALC_TRUE		1
 #define ALC_DEFAULT_DEVICE_SPECIFIER	0x1004
 #define ALC_DEVICE_SPECIFIER			0x1005
+#define ALC_ALL_DEVICES_SPECIFIER		0x1013
+#define ALC_CAPTURE_DEVICE_SPECIFIER			0x310
+#define ALC_CAPTURE_DEFAULT_DEVICE_SPECIFIER	0x311
 HINSTANCE hOAL;
 const ALCchar* (*alcGetString)( ALCdevice *device, ALCenum param ) = NULL;
+ALCboolean     (*alcIsExtensionPresent)( ALCdevice *device, const ALCchar *extname ) = NULL;
 
-std::vector<std::string> OpenAL_sound_devices;
+std::vector<std::string> OpenAL_playback_devices;
+std::vector<std::string> OpenAL_capture_devices;
+
 
 /////////////////////////////////////////////////////////////////////////////
 // CTabSound dialog
@@ -58,6 +67,7 @@ void CTabSound::DoDataExchange(CDataExchange* pDX)
 	//{{AFX_DATA_MAP(CTabSound)
 	DDX_Control(pDX, IDC_JOYSTICK, m_joystick_list);
 	DDX_Control(pDX, IDC_SOUND_CARD, m_sound_api_list);
+	DDX_Control(pDX, IDC_SOUND_CAPTURE_CARD, m_capture_api_list);
 	//}}AFX_DATA_MAP
 }
 
@@ -75,21 +85,44 @@ END_MESSAGE_MAP()
 
 void CTabSound::OnApply()
 {
+	const int CHECKED = 1; 
+
 	// Sound settings
 	int index = m_sound_api_list.GetCurSel();
 
-	char string[50];
+	char string[256];
 	m_sound_api_list.GetLBText(index, string);
 
-	if ( Settings::openal_build == true ) {
+	if ( Settings::is_new_sound_build() ) {
+		// preferred devices
+		reg_set_sz(Settings::reg_path, "Sound\\PlaybackDevice", string);
+
+		index = m_capture_api_list.GetCurSel();
+		m_capture_api_list.GetLBText(index, string);
+
+		reg_set_sz(Settings::reg_path, "Sound\\CaptureDevice", string);
+
+		// EFX
+		int efx = (((CButton *) GetDlgItem(IDC_EFX))->GetCheck() == CHECKED) ? 1 : 0;
+		reg_set_dword(Settings::reg_path, "Sound\\EnableEFX", efx);
+
+		// SampleRate
+		char  sample_rate_text[50];
+		int   sample_rate_value;
+		GetDlgItem(IDC_SAMPLE_RATE)->GetWindowText(sample_rate_text, 50);
+
+		if (strlen(sample_rate_text) > 0) {
+			sample_rate_value = atoi(sample_rate_text);
+			reg_set_dword(Settings::reg_path, "Sound\\SampleRate", sample_rate_value);
+		}
+	} else if ( Settings::is_openal_build() ) {
 		reg_set_sz(Settings::reg_path, "SoundDeviceOAL", string);
 	} else {
 		reg_set_sz(Settings::reg_path, "Soundcard", string);
 	}
 
-	// Joystick settings
-	const int CHECKED = 1; 
 
+	// Joystick settings
 	int ff = (((CButton *) GetDlgItem(IDC_FORCE_FREEDBACK))->GetCheck() == CHECKED) ? 1 : 0;
 	int dh = (((CButton *) GetDlgItem(IDC_DIR_HIT))->GetCheck() == CHECKED) ? 1 : 0;
 		
@@ -107,9 +140,73 @@ void CTabSound::OnApply()
 	reg_set_dword(Settings::reg_path, "CurrentJoystick", enum_id);
 }
 
+void CTabSound::SetupOpenALPlayback()
+{
+	const char *default_device = (const char*) alcGetString( NULL, ALC_DEFAULT_DEVICE_SPECIFIER );
+
+	if (default_device) {
+		OpenAL_playback_devices.push_back(default_device);
+	}
+
+	if ( alcIsExtensionPresent(NULL, (const ALCchar*)"ALC_ENUMERATION_EXT") == ALC_TRUE ) {
+		const char *all_devices = NULL;
+
+		if ( alcIsExtensionPresent(NULL, (const ALCchar*)"ALC_ENUMERATE_ALL_EXT") == ALC_TRUE ) {
+			all_devices = (const char*) alcGetString(NULL, ALC_ALL_DEVICES_SPECIFIER);
+		} else {
+			all_devices = (const char*) alcGetString(NULL, ALC_DEVICE_SPECIFIER);
+		}
+
+		char *pos = (char*)all_devices;
+
+		while (*pos && (strlen(pos) > 0)) {
+			// see if this is the default device, which is already in the list
+			if (default_device && !strcmp(default_device, pos)) {
+				pos += (strlen(pos) + 1);
+				continue;
+			}
+
+			OpenAL_playback_devices.push_back(pos);
+
+			pos += (strlen(pos) + 1);
+		}
+	}
+
+	if ( !Settings::is_new_sound_build() ) {
+		OpenAL_playback_devices.push_back("no sound");
+	}
+}
+
+void CTabSound::SetupOpenALCapture()
+{
+	const char *default_device = (const char*) alcGetString( NULL, ALC_CAPTURE_DEFAULT_DEVICE_SPECIFIER );
+
+	if (default_device) {
+		OpenAL_capture_devices.push_back(default_device);
+	}
+
+	if ( alcIsExtensionPresent(NULL, (const ALCchar*)"ALC_ENUMERATION_EXT") == ALC_TRUE ) {
+		const char *all_devices = (const char*) alcGetString(NULL, ALC_CAPTURE_DEVICE_SPECIFIER);
+
+		char *pos = (char*)all_devices;
+
+		while (*pos && (strlen(pos) > 0)) {
+			// see if this is the default device, which is already in the list
+			if (default_device && !strcmp(default_device, pos)) {
+				pos += (strlen(pos) + 1);
+				continue;
+			}
+
+			OpenAL_capture_devices.push_back(pos);
+
+			pos += (strlen(pos) + 1);
+		}
+	}
+}
+
 void CTabSound::SetupOpenAL()
 {
-	if ( OpenAL_sound_devices.size() < 1 ) {
+	if ( OpenAL_playback_devices.empty() ) {
 		if ( (hOAL = LoadLibrary("OpenAL32.dll")) == 0 ) {
 			MessageBox("Build needs OpenAL but an OpenAL DLL cannot be found!", "Error", MB_OK);
 			return;
@@ -123,37 +220,55 @@ void CTabSound::SetupOpenAL()
 			return;
 		}
 
-		const char *my_devices = (const char*) alcGetString( NULL, ALC_DEVICE_SPECIFIER );
-		char *pos = NULL;
+		alcIsExtensionPresent = (ALCboolean (*)(ALCdevice *device, const ALCchar *extname)) GetProcAddress( hOAL, "alcIsExtensionPresent" );
 
-		pos = (char*)my_devices;
-
-		while (*pos && (strlen(pos) > 0)) {
-			OpenAL_sound_devices.push_back(pos);
-
-			pos += (strlen(pos) + 1);
+		if (alcIsExtensionPresent == NULL) {
+			FreeLibrary( hOAL );
+			MessageBox("Unable to acquire alcIsExtensionPresent pointer!", "Error", MB_OK);
+			return;
 		}
 
-		OpenAL_sound_devices.push_back("no sound");
+		SetupOpenALPlayback();
+
+		if ( Settings::is_new_sound_build() ) {
+			SetupOpenALCapture();
+		}
 
 		FreeLibrary( hOAL );
+
+		alcGetString = NULL;
+		alcIsExtensionPresent = NULL;
 	}
 
+	// playback devices
 	m_sound_api_list.ResetContent();
 
 	unsigned int i;
 	int selection = 0;
 
-	for (i = 0; i < OpenAL_sound_devices.size(); i++) {
-		m_sound_api_list.InsertString(i, OpenAL_sound_devices[i].c_str());
+	for (i = 0; i < OpenAL_playback_devices.size(); i++) {
+		m_sound_api_list.InsertString(i, OpenAL_playback_devices[i].c_str());
 
-		if ( !stricmp(OpenAL_sound_devices[i].c_str(), "Generic Software") ) {
-			GetDlgItem(IDC_OAL_WARN_STATIC)->ShowWindow(false);
-			selection = i;
+		if ( !Settings::is_new_sound_build() ) {
+			if (  !stricmp(OpenAL_playback_devices[i].c_str(), "Generic Software") ) {
+				GetDlgItem(IDC_OAL_WARN_STATIC)->ShowWindow(false);
+				selection = i;
+			}
 		}
 	}
 
 	m_sound_api_list.SetCurSel(selection);
+
+
+	// capture devices
+	m_capture_api_list.ResetContent();
+	selection = 0;
+
+	for (i = 0; i < OpenAL_capture_devices.size(); i++) {
+		m_capture_api_list.InsertString(i, OpenAL_capture_devices[i].c_str());
+	}
+
+	m_capture_api_list.SetCurSel(selection);
 }
 
 BOOL CTabSound::OnInitDialog() 
@@ -175,8 +290,14 @@ BOOL CTabSound::OnInitDialog()
 		m_sound_api_list.InsertString(i, sound_card_modes[i]);
 
 	m_sound_api_list.SetCurSel(0);
+	m_capture_api_list.SetCurSel(0);
 
 	GetDlgItem(IDC_OAL_WARN_STATIC)->ShowWindow(false);
+	GetDlgItem(IDC_EFX)->ShowWindow(false);
+	GetDlgItem(IDC_SAMPLE_RATE_STATIC)->ShowWindow(false);
+	GetDlgItem(IDC_SAMPLE_RATE)->ShowWindow(false);
+	GetDlgItem(IDC_CAPTURE_STATIC)->ShowWindow(false);
+	GetDlgItem(IDC_SOUND_CAPTURE_CARD)->ShowWindow(false);
 
 	// Joystick
 	list_index = m_joystick_list.AddString("No Joystick");
@@ -243,17 +364,39 @@ Done:
 
 void CTabSound::LoadSettings()
 {
-	DWORD ff, dh;
+	DWORD ff, dh, efx, sample_rate;
 
-	if ( Settings::openal_build == true ) {
+	OpenAL_playback_devices.clear();
+	OpenAL_capture_devices.clear();
+
+	GetDlgItem(IDC_OAL_WARN_STATIC)->ShowWindow(false);
+	GetDlgItem(IDC_EFX)->ShowWindow(false);
+	GetDlgItem(IDC_SAMPLE_RATE_STATIC)->ShowWindow(false);
+	GetDlgItem(IDC_SAMPLE_RATE)->ShowWindow(false);
+	GetDlgItem(IDC_CAPTURE_STATIC)->ShowWindow(false);
+	GetDlgItem(IDC_SOUND_CAPTURE_CARD)->ShowWindow(false);
+
+	if ( Settings::is_new_sound_build() ) {
+		GetDlgItem(IDC_EAX_STATIC)->ShowWindow(false);
+		GetDlgItem(IDC_CAPTURE_STATIC)->ShowWindow(true);
+		GetDlgItem(IDC_SOUND_CAPTURE_CARD)->ShowWindow(true);
+		GetDlgItem(IDC_EFX)->ShowWindow(true);
+		GetDlgItem(IDC_SAMPLE_RATE_STATIC)->ShowWindow(true);
+		GetDlgItem(IDC_SAMPLE_RATE)->ShowWindow(true);
+
+		GetDlgItem(IDC_SOUND_STATIC)->SetWindowText("Preferred Playback Device");
+		((CEdit *) GetDlgItem(IDC_SAMPLE_RATE))->SetLimitText(5);
+	} else if ( Settings::is_openal_build() ) {
 		GetDlgItem(IDC_OAL_WARN_STATIC)->ShowWindow(true);
 		GetDlgItem(IDC_EAX_STATIC)->ShowWindow(false);
 		GetDlgItem(IDC_SOUND_STATIC)->SetWindowText("Currently selected OpenAL Sound Device");
-
-		SetupOpenAL();
 	} else {
 		GetDlgItem(IDC_EAX_STATIC)->ShowWindow(true);
 		GetDlgItem(IDC_SOUND_STATIC)->SetWindowText("Currently selected Sound Card");
+	}
+
+	if ( Settings::is_openal_build() ) {
+		SetupOpenAL();
 	}
 
 	reg_get_dword(Settings::reg_path, "EnableJoystickFF", &ff);
@@ -262,10 +405,55 @@ void CTabSound::LoadSettings()
 	((CButton *) GetDlgItem(IDC_FORCE_FREEDBACK))->SetCheck(ff ? 1 : 0);
 	((CButton *) GetDlgItem(IDC_DIR_HIT))->SetCheck(dh ? 1 : 0);
 
-	char local_port_text[50];
+	char local_port_text[256];
 
-	if ( Settings::openal_build == false ) {
-		reg_get_sz(Settings::reg_path, "SoundCard", local_port_text, 50);
+	if ( Settings::is_new_sound_build() ) {
+		unsigned int i;
+
+		reg_get_sz(Settings::reg_path, "Sound\\PlaybackDevice", local_port_text, 256);
+
+		for (i = 0; i < OpenAL_playback_devices.size(); i++) {
+			if ( !strcmp(OpenAL_playback_devices[i].c_str(), local_port_text) ) {
+				m_sound_api_list.SetCurSel(i);
+				break;
+			}
+		}
+
+		reg_get_sz(Settings::reg_path, "Sound\\CaptureDevice", local_port_text, 256);
+
+		for (i = 0; i < OpenAL_capture_devices.size(); i++) {
+			if ( !strcmp(OpenAL_capture_devices[i].c_str(), local_port_text) ) {
+				m_capture_api_list.SetCurSel(i);
+				break;
+			}
+		}
+
+		reg_get_dword(Settings::reg_path, "Sound\\EnableEFX", &efx);
+		((CButton *) GetDlgItem(IDC_EFX))->SetCheck(efx ? 1 : 0);
+
+		if ( reg_get_dword(Settings::reg_path, "Sound\\SampleRate", &sample_rate) == true ) {
+			sprintf(local_port_text, "%d", sample_rate);
+			GetDlgItem(IDC_EFX)->SetWindowText(local_port_text);
+		}
+	} else if ( Settings::is_openal_build() ) {
+		reg_get_sz(Settings::reg_path, "SoundDeviceOAL", local_port_text, 256);
+
+		for (unsigned int i = 0; i < OpenAL_playback_devices.size(); i++) {
+			if ( !stricmp(OpenAL_playback_devices[i].c_str(), local_port_text) ) {
+				m_sound_api_list.SetCurSel(i);
+
+				// if not software device then show warning message
+				if ( stricmp(OpenAL_playback_devices[i].c_str(), "no sound") && 
+						stricmp(OpenAL_playback_devices[i].c_str(), "Generic Software") )
+				{
+					GetDlgItem(IDC_OAL_WARN_STATIC)->ShowWindow(true);
+				}
+
+				break;
+			}
+		}
+	} else {
+		reg_get_sz(Settings::reg_path, "SoundCard", local_port_text, 256);
 
 		for(int i = 0; i < NUM_SND_MODES; i++)
 		{
@@ -273,23 +461,6 @@ void CTabSound::LoadSettings()
 			{
 				m_sound_api_list.SetCurSel(i);
 				break;;
-			}
-		}
-	} else {
-		reg_get_sz(Settings::reg_path, "SoundDeviceOAL", local_port_text, 50);
-
-		for (unsigned int i = 0; i < OpenAL_sound_devices.size(); i++) {
-			if ( !stricmp(OpenAL_sound_devices[i].c_str(), local_port_text) ) {
-				m_sound_api_list.SetCurSel(i);
-
-				// if not software device then show warning message
-				if ( stricmp(OpenAL_sound_devices[i].c_str(), "no sound") && 
-						stricmp(OpenAL_sound_devices[i].c_str(), "Generic Software") )
-				{
-					GetDlgItem(IDC_OAL_WARN_STATIC)->ShowWindow(true);
-				}
-
-				break;
 			}
 		}
 	}
@@ -332,10 +503,10 @@ void CTabSound::OnDestroy()
 
 void CTabSound::OnSelChangeSoundDevice()
 {
-	if ( Settings::openal_build == false )
+	if ( !Settings::is_openal_build() || Settings::is_new_sound_build() )
 		return;
 
-	char device_str[50];
+	char device_str[256];
 	int index = m_sound_api_list.GetCurSel();
 
 	m_sound_api_list.GetLBText(index, device_str);

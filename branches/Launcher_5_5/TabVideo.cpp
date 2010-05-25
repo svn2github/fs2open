@@ -169,6 +169,10 @@ BOOL CTabVideo::InitTabControl(int type)
 		api_dialogs[i]   = NULL;
 		api_available[i] = (type & (1 << i)) > 0;
 
+		if ( Settings::is_no_d3d_build() && (i != GR_OPENGL) ) {
+			api_available[i] = 0;
+		}
+
 	 	if(api_available[i])
 		{
 			m_api_droplist.InsertString(count, api_text_desc[i]);

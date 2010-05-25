@@ -247,23 +247,31 @@ IDD_SOUND DIALOG DISCARDABLE  0, 0, 201, 199
 STYLE WS_CHILD
 FONT 8, "MS Sans Serif"
 BEGIN
-    GROUPBOX        "Sound",IDC_STATIC,7,7,187,79
-    LTEXT           "Currently selected Sound Card",IDC_SOUND_STATIC,15,20,
+    GROUPBOX        "Sound",IDC_STATIC,7,7,187,88
+    LTEXT           "Currently selected Sound Card",IDC_SOUND_STATIC,15,19,
                     153,8
-    COMBOBOX        IDC_SOUND_CARD,15,31,173,50,CBS_DROPDOWNLIST | CBS_SORT | 
+    COMBOBOX        IDC_SOUND_CARD,15,30,173,50,CBS_DROPDOWNLIST | CBS_SORT | 
                     WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Preferred Capture Device",IDC_CAPTURE_STATIC,15,47,141,
+                    10
+    COMBOBOX        IDC_SOUND_CAPTURE_CARD,15,58,173,50,CBS_DROPDOWNLIST | 
+                    CBS_SORT | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Sample Rate",IDC_SAMPLE_RATE_STATIC,99,78,44,11
+    EDITTEXT        IDC_SAMPLE_RATE,145,76,43,13,ES_AUTOHSCROLL | ES_NUMBER
+    CONTROL         "Enable EFX",IDC_EFX,"Button",BS_AUTOCHECKBOX | 
+                    WS_TABSTOP,15,78,54,9
+    LTEXT           "WARNING:  Setting OpenAL sound device to something other than ""Generic Software"" may make music stop working.",
+                    IDC_OAL_WARN_STATIC,15,49,173,33
     CTEXT           "Only select EAX or A3D if your card supports it",
                     IDC_EAX_STATIC,15,49,173,8
-    GROUPBOX        "Joystick",IDC_STATIC,7,91,187,99
-    COMBOBOX        IDC_JOYSTICK,15,105,173,51,CBS_DROPDOWNLIST | WS_VSCROLL | 
+    GROUPBOX        "Joystick",IDC_STATIC,7,99,187,91
+    COMBOBOX        IDC_JOYSTICK,15,113,173,51,CBS_DROPDOWNLIST | WS_VSCROLL | 
                     WS_TABSTOP
     CONTROL         "Enable Force Feedback",IDC_FORCE_FREEDBACK,"Button",
                     BS_AUTOCHECKBOX | WS_TABSTOP,15,134,108,10
     CONTROL         "Enable Directional Hit (Force Feedback)",IDC_DIR_HIT,
                     "Button",BS_AUTOCHECKBOX | WS_TABSTOP,15,148,155,10
     PUSHBUTTON      "Calibrate",IDC_CALIBRATE,15,169,173,14
-    LTEXT           "WARNING:  Setting OpenAL sound device to something other than ""Generic Software"" may make music stop working.",
-                    IDC_OAL_WARN_STATIC,15,49,173,33
 END
 
 IDD_DX8 DIALOG DISCARDABLE  0, 0, 187, 109
@@ -497,6 +505,7 @@ BEGIN
         VERTGUIDE, 188
         TOPMARGIN, 7
         BOTTOMMARGIN, 190
+        HORZGUIDE, 78
     END
 
     IDD_DX8, DIALOG

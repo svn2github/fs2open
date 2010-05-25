@@ -23,6 +23,7 @@ public:
 	enum { IDD = IDD_SOUND };
 	CComboBox	m_joystick_list;
 	CComboBox	m_sound_api_list;
+	CComboBox	m_capture_api_list;
 	//}}AFX_DATA
 
 
@@ -34,6 +35,8 @@ public:
 	//}}AFX_VIRTUAL
 
 private:
+	void SetupOpenALPlayback();
+	void SetupOpenALCapture();
 	void SetupOpenAL();
 
 // Implementation

@@ -468,9 +468,12 @@ void CTabCommLine::ConstructFlagList()
 
 	fread(exe_params, sizeof(Flag) * num_params, 1, fp);
 
-	// hack for OpenAL check
+	// hack for build flags check
 	if ( (filelength(fileno(fp)) - ftell(fp)) == 1 ) {
-		Settings::is_openal(true);
+		unsigned char flags = 0;
+		fread(&flags, 1, 1, fp);
+
+		Settings::set_build_flags((int)flags);
 	}
 
 	fclose(fp);

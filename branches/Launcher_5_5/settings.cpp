@@ -23,7 +23,11 @@ char flags_custom[10240]      = "";
 char flags_default_mod[10240] = "";
 char flags_custom_mod[10240]  = "";
 
-bool Settings::openal_build = false;
+int Settings::build_flags = 0;
+
+#define BUILD_CAP_OPENAL	(1<<0)
+#define BUILD_CAP_NO_D3D	(1<<1)
+#define BUILD_CAP_NEW_SND	(1<<2)
 
 
 void Settings::set_exe_filepath(char *path)
@@ -100,9 +104,24 @@ bool Settings::get_exe_path_from_ini()
 	return true;
 }
 
-void Settings::is_openal(bool value)
+void Settings::set_build_flags(int flags)
 {
-	openal_build = value;
+	build_flags = flags;
+}
+
+bool Settings::is_openal_build()
+{
+	return ((build_flags & BUILD_CAP_OPENAL) != 0);
+}
+
+bool Settings::is_no_d3d_build()
+{
+	return ((build_flags & BUILD_CAP_NO_D3D) != 0);
+}
+
+bool Settings::is_new_sound_build()
+{
+	return ((build_flags & BUILD_CAP_NEW_SND) != 0);
 }
 
 

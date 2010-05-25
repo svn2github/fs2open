@@ -511,6 +511,8 @@ void CLauncherDlg::NewExeSet(char *exe_path)
 		Settings::set_reg_path("", EXE_TYPE_NONE);
 	}
 
+	Settings::set_build_flags(0);
+
 	// Setup reg dir
 	tab_comm_line.SelectRegPathAndExeType();				
 

@@ -30,17 +30,17 @@ Class17=CTabVideo
 ResourceCount=15
 Resource1=IDD_NETWORK (English (U.K.))
 Resource2=IDD_VIDEO (English (U.K.))
-Resource3=IDD_DX8 (English (U.K.))
-Resource4=IDD_OGL (English (U.K.))
-Resource5=IDD_DX5 (English (U.K.))
-Resource6=IDD_3DFX (English (U.K.))
-Resource7=IDD_SPEECH (English (U.K.))
-Resource8=IDD_SOUND (English (U.K.))
-Resource9=IDD_DX9 (English (U.K.))
-Resource10=IDD_COMM_LINE (English (U.K.))
-Resource11=IDD_ABOUTBOX
-Resource12=IDD_LAUNCHER_DIALOG
-Resource13=IDD_REG_OPTIONS (English (U.K.))
+Resource3=IDD_COMM_LINE (English (U.K.))
+Resource4=IDD_3DFX (English (U.K.))
+Resource5=IDD_SPEECH (English (U.K.))
+Resource6=IDD_SOUND (English (U.K.))
+Resource7=IDD_REG_OPTIONS (English (U.K.))
+Resource8=IDD_OGL (English (U.K.))
+Resource9=IDD_ABOUTBOX
+Resource10=IDD_DX8 (English (U.K.))
+Resource11=IDD_LAUNCHER_DIALOG
+Resource12=IDD_DX9 (English (U.K.))
+Resource13=IDD_DX5 (English (U.K.))
 Resource14=IDD_HELP (English (U.K.))
 Resource15=IDD_MOD (English (U.K.))
 
@@ -279,17 +279,22 @@ Control16=IDC_CUSTOM_IP,edit,1350631552
 [DLG:IDD_SOUND (English (U.K.))]
 Type=1
 Class=?
-ControlCount=10
+ControlCount=15
 Control1=IDC_STATIC,button,1342177287
 Control2=IDC_SOUND_STATIC,static,1342308352
 Control3=IDC_SOUND_CARD,combobox,1344340227
-Control4=IDC_EAX_STATIC,static,1342308353
-Control5=IDC_STATIC,button,1342177287
-Control6=IDC_JOYSTICK,combobox,1344339971
-Control7=IDC_FORCE_FREEDBACK,button,1342242819
-Control8=IDC_DIR_HIT,button,1342242819
-Control9=IDC_CALIBRATE,button,1342242816
-Control10=IDC_OAL_WARN_STATIC,static,1342308352
+Control4=IDC_CAPTURE_STATIC,static,1342308352
+Control5=IDC_SOUND_CAPTURE_CARD,combobox,1344340227
+Control6=IDC_SAMPLE_RATE_STATIC,static,1342308352
+Control7=IDC_SAMPLE_RATE,edit,1350639744
+Control8=IDC_EFX,button,1342242819
+Control9=IDC_OAL_WARN_STATIC,static,1342308352
+Control10=IDC_EAX_STATIC,static,1342308353
+Control11=IDC_STATIC,button,1342177287
+Control12=IDC_JOYSTICK,combobox,1344339971
+Control13=IDC_FORCE_FREEDBACK,button,1342242819
+Control14=IDC_DIR_HIT,button,1342242819
+Control15=IDC_CALIBRATE,button,1342242816
 
 [DLG:IDD_DX8 (English (U.K.))]
 Type=1
@@ -362,7 +367,7 @@ Control12=IDC_GET_VOICES,button,1342242816
 [DLG:IDD_HELP (English (U.K.))]
 Type=1
 Class=?
-ControlCount=15
+ControlCount=16
 Control1=IDC_LOGO2,static,1350570510
 Control2=IDC_STATIC,static,1342308353
 Control3=IDC_STATIC,static,1342308352
@@ -378,6 +383,7 @@ Control12=IDC_LOGO1,static,1350570510
 Control13=IDC_STATIC,static,1073872896
 Control14=IDC_STATIC,static,1342308352
 Control15=IDC_LOGO3,static,1350570510
+Control16=IDC_REGISTER_BUTTON,button,1342242816
 
 [DLG:IDD_DX9 (English (U.K.))]
 Type=1
@@ -420,6 +426,6 @@ Control4=IDC_STATIC,button,1342177287
 Control5=IDC_MOD_IMAGE,static,1342177294
 Control6=IDC_MOD_WEBSITE,button,1476460544
 Control7=IDC_MOD_FORUM,button,1476460544
-Control8=IDC_MOD_TEXT,edit,1350633540
+Control8=IDC_MOD_TEXT,edit,1352730692
 Control9=IDC_STATIC,static,1342177287
 

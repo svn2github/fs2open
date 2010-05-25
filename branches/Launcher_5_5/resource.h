@@ -64,6 +64,7 @@
 #define IDC_CHECK3                      1006
 #define IDC_SPEECH_BRIEFINGS            1006
 #define IDC_GF4_FFIX                    1006
+#define IDC_EFX                         1006
 #define IDC_CHECK4                      1007
 #define IDC_CHECK5                      1008
 #define IDC_CHECK6                      1009
@@ -75,6 +76,7 @@
 #define IDC_PATH                        1014
 #define IDC_ERROR                       1014
 #define IDC_CUSTOM_IP                   1014
+#define IDC_SAMPLE_RATE                 1014
 #define IDC_APPLY                       1015
 #define IDC_HOLDER                      1016
 #define IDC_DLG_HOLDER                  1017
@@ -106,6 +108,7 @@
 #define IDC_OGL_RES                     1056
 #define IDC_SOUND_CARD                  1057
 #define IDC_DX5_RES                     1058
+#define IDC_SOUND_CAPTURE_CARD          1058
 #define IDC_GLIDE_RES                   1059
 #define IDC_DX8_NOT_INSTALLED           1060
 #define IDC_EDIT                        1062
@@ -160,6 +163,8 @@
 #define IDC_EAX_STATIC                  1119
 #define IDC_OAL_WARN_STATIC             1120
 #define IDC_CUSTOM_IP_TEXT              1122
+#define IDC_CAPTURE_STATIC              1129
+#define IDC_SAMPLE_RATE_STATIC          1131
 
 // Next default values for new objects
 // 
@@ -167,7 +172,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        159
 #define _APS_NEXT_COMMAND_VALUE         32771
-#define _APS_NEXT_CONTROL_VALUE         1129
+#define _APS_NEXT_CONTROL_VALUE         1132
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif
