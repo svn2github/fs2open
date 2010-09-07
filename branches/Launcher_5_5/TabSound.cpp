@@ -94,17 +94,20 @@ void CTabSound::OnApply()
 	m_sound_api_list.GetLBText(index, string);
 
 	if ( Settings::is_new_sound_build() ) {
+		char snd_reg_path[MAX_PATH] = { 0 };
+		_snprintf(snd_reg_path, MAX_PATH - 1, "%s\\%s", Settings::reg_path, "Sound");
+
 		// preferred devices
-		reg_set_sz(Settings::reg_path, "Sound\\PlaybackDevice", string);
+		reg_set_sz(snd_reg_path, "PlaybackDevice", string);
 
 		index = m_capture_api_list.GetCurSel();
 		m_capture_api_list.GetLBText(index, string);
 
-		reg_set_sz(Settings::reg_path, "Sound\\CaptureDevice", string);
+		reg_set_sz(snd_reg_path, "CaptureDevice", string);
 
 		// EFX
 		int efx = (((CButton *) GetDlgItem(IDC_EFX))->GetCheck() == CHECKED) ? 1 : 0;
-		reg_set_dword(Settings::reg_path, "Sound\\EnableEFX", efx);
+		reg_set_dword(snd_reg_path, "EnableEFX", efx);
 
 		// SampleRate
 		char  sample_rate_text[50];
@@ -113,7 +116,7 @@ void CTabSound::OnApply()
 
 		if (strlen(sample_rate_text) > 0) {
 			sample_rate_value = atoi(sample_rate_text);
-			reg_set_dword(Settings::reg_path, "Sound\\SampleRate", sample_rate_value);
+			reg_set_dword(snd_reg_path, "SampleRate", sample_rate_value);
 		}
 	} else if ( Settings::is_openal_build() ) {
 		reg_set_sz(Settings::reg_path, "SoundDeviceOAL", string);
@@ -410,7 +413,10 @@ void CTabSound::LoadSettings()
 	if ( Settings::is_new_sound_build() ) {
 		unsigned int i;
 
-		reg_get_sz(Settings::reg_path, "Sound\\PlaybackDevice", local_port_text, 256);
+		char snd_reg_path[MAX_PATH] = { 0 };
+		_snprintf(snd_reg_path, MAX_PATH - 1, "%s\\%s", Settings::reg_path, "Sound");
+
+		reg_get_sz(snd_reg_path, "PlaybackDevice", local_port_text, 256);
 
 		for (i = 0; i < OpenAL_playback_devices.size(); i++) {
 			if ( !strcmp(OpenAL_playback_devices[i].c_str(), local_port_text) ) {
@@ -419,7 +425,7 @@ void CTabSound::LoadSettings()
 			}
 		}
 
-		reg_get_sz(Settings::reg_path, "Sound\\CaptureDevice", local_port_text, 256);
+		reg_get_sz(snd_reg_path, "CaptureDevice", local_port_text, 256);
 
 		for (i = 0; i < OpenAL_capture_devices.size(); i++) {
 			if ( !strcmp(OpenAL_capture_devices[i].c_str(), local_port_text) ) {
@@ -428,10 +434,10 @@ void CTabSound::LoadSettings()
 			}
 		}
 
-		reg_get_dword(Settings::reg_path, "Sound\\EnableEFX", &efx);
+		reg_get_dword(snd_reg_path, "EnableEFX", &efx);
 		((CButton *) GetDlgItem(IDC_EFX))->SetCheck(efx ? 1 : 0);
 
-		if ( reg_get_dword(Settings::reg_path, "Sound\\SampleRate", &sample_rate) == true ) {
+		if ( reg_get_dword(snd_reg_path, "SampleRate", &sample_rate) == true ) {
 			sprintf(local_port_text, "%d", sample_rate);
 			GetDlgItem(IDC_EFX)->SetWindowText(local_port_text);
 		}
