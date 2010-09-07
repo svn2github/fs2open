@@ -47,7 +47,7 @@ IDD_LAUNCHER_DIALOG DIALOGEX 0, 0, 222, 275
 STYLE DS_MODALFRAME | DS_3DLOOK | WS_POPUP | WS_VISIBLE | WS_CAPTION | 
     WS_SYSMENU
 EXSTYLE WS_EX_APPWINDOW
-CAPTION "FS2 Open Launcher 5.5f"
+CAPTION "FS2 Open Launcher 5.5g"
 FONT 8, "MS Sans Serif"
 BEGIN
     PUSHBUTTON      "&Browse",IDC_BROWSE,165,5,50,14
@@ -69,8 +69,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 5,5,0,4
- PRODUCTVERSION 5,5,0,4
+ FILEVERSION 5,5,0,6
+ PRODUCTVERSION 5,5,0,6
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -88,14 +88,14 @@ BEGIN
             VALUE "Comments", "\0"
             VALUE "CompanyName", "Source Code Project\0"
             VALUE "FileDescription", "FreeSpace Launcher\0"
-            VALUE "FileVersion", "5.5f\0"
+            VALUE "FileVersion", "5.5g\0"
             VALUE "InternalName", "Launcher\0"
             VALUE "LegalCopyright", "Copyright (C) 2007-2010\0"
             VALUE "LegalTrademarks", "\0"
             VALUE "OriginalFilename", "Launcher.exe\0"
             VALUE "PrivateBuild", "\0"
             VALUE "ProductName", "Launcher Application\0"
-            VALUE "ProductVersion", "5.5f\0"
+            VALUE "ProductVersion", "5.5g\0"
             VALUE "SpecialBuild", "\0"
         END
     END
