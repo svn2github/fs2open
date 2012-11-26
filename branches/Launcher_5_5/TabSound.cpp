@@ -439,7 +439,7 @@ void CTabSound::LoadSettings()
 
 		if ( reg_get_dword(snd_reg_path, "SampleRate", &sample_rate) == true ) {
 			sprintf(local_port_text, "%d", sample_rate);
-			GetDlgItem(IDC_EFX)->SetWindowText(local_port_text);
+			GetDlgItem(IDC_SAMPLE_RATE)->SetWindowText(local_port_text);
 		}
 	} else if ( Settings::is_openal_build() ) {
 		reg_get_sz(Settings::reg_path, "SoundDeviceOAL", local_port_text, 256);
