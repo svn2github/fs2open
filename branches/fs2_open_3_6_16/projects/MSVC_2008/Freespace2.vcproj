@@ -52,7 +52,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="0"
 				AdditionalIncludeDirectories="../../code;../../libjpeg;../../libpng;../../lua;../../oggvorbis/include;../../openal/include;../../zlib;"
-				PreprocessorDefinitions="_WINDOWS;WIN32;_DEBUG;_SECURE_SCL=0;_HAS_ITERATOR_DEBUGGING=0;"
+				PreprocessorDefinitions="_WINDOWS;WIN32;_DEBUG;_SECURE_SCL=0;_HAS_ITERATOR_DEBUGGING=0;FS2_SPEECH;FS2_VOICER;"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="1"
@@ -75,7 +75,7 @@
 			/>
 			<Tool
 				Name="VCResourceCompilerTool"
-				PreprocessorDefinitions="_DEBUG;_VC08;"
+				PreprocessorDefinitions="_DEBUG;_VC08;FS2_VOICER;"
 				Culture="1033"
 			/>
 			<Tool
@@ -87,7 +87,7 @@
 				UseLibraryDependencyInputs="false"
 				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib winmm.lib vfw32.lib msacm32.lib comctl32.lib openal32.lib ogg_static.lib vorbis_static.lib vorbisfile_static.lib theora_static.lib ole32.lib advapi32.lib gdi32.lib user32.lib"
 				ShowProgress="0"
-				OutputFile="$(OutDir)\fs2_open_3_6_16_RC1d_NO-SSE.exe"
+				OutputFile="$(OutDir)\fs2_open_3_6_16_RC1_DEBUG_NO-INF_NO-SSE.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
 				AdditionalLibraryDirectories="&quot;$(ConfigurationName)&quot;;../../oggvorbis/lib;../../openal/libs/win32;../../openal/libs/win64;"
@@ -164,7 +164,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="0"
 				AdditionalIncludeDirectories="../../code;../../libjpeg;../../libpng;../../lua;../../oggvorbis/include;../../openal/include;../../zlib;"
-				PreprocessorDefinitions="_WINDOWS;WIN32;_DEBUG;INF_BUILD;_SECURE_SCL=0;_HAS_ITERATOR_DEBUGGING=0;"
+				PreprocessorDefinitions="_WINDOWS;WIN32;_DEBUG;INF_BUILD;_SECURE_SCL=0;_HAS_ITERATOR_DEBUGGING=0;FS2_SPEECH;FS2_VOICER;"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="1"
@@ -186,7 +186,7 @@
 			/>
 			<Tool
 				Name="VCResourceCompilerTool"
-				PreprocessorDefinitions="_DEBUG;_VC08;"
+				PreprocessorDefinitions="_DEBUG;_VC08;FS2_VOICER;"
 				Culture="1033"
 			/>
 			<Tool
@@ -198,7 +198,7 @@
 				UseLibraryDependencyInputs="false"
 				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib winmm.lib vfw32.lib msacm32.lib comctl32.lib openal32.lib ogg_static.lib vorbis_static.lib vorbisfile_static.lib theora_static.lib ole32.lib advapi32.lib gdi32.lib user32.lib"
 				ShowProgress="0"
-				OutputFile="$(OutDir)\fs2_open_3_6_16_RC1d_INF_NO-SSE.exe"
+				OutputFile="$(OutDir)\fs2_open_3_6_16_RC1_DEBUG_NO-SSE.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
 				AdditionalLibraryDirectories="&quot;$(ConfigurationName)&quot;;../../oggvorbis/lib;../../openal/libs/win32;../../openal/libs/win64;"
@@ -275,7 +275,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="0"
 				AdditionalIncludeDirectories="../../code;../../libjpeg;../../libpng;../../lua;../../oggvorbis/include;../../openal/include;../../zlib;"
-				PreprocessorDefinitions="_WINDOWS;WIN32;_DEBUG;INF_BUILD;_SECURE_SCL=0;_HAS_ITERATOR_DEBUGGING=0;"
+				PreprocessorDefinitions="_WINDOWS;WIN32;_DEBUG;INF_BUILD;_SECURE_SCL=0;_HAS_ITERATOR_DEBUGGING=0;FS2_SPEECH;FS2_VOICER;"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="1"
@@ -299,7 +299,7 @@
 			/>
 			<Tool
 				Name="VCResourceCompilerTool"
-				PreprocessorDefinitions="_DEBUG;_VC08;"
+				PreprocessorDefinitions="_DEBUG;_VC08;FS2_VOICER;"
 				Culture="1033"
 			/>
 			<Tool
@@ -311,7 +311,7 @@
 				UseLibraryDependencyInputs="false"
 				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib winmm.lib vfw32.lib msacm32.lib comctl32.lib openal32.lib ogg_static.lib vorbis_static.lib vorbisfile_static.lib theora_static.lib ole32.lib advapi32.lib gdi32.lib user32.lib"
 				ShowProgress="0"
-				OutputFile="$(OutDir)\fs2_open_3_6_16_RC1d_INF_SSE.exe"
+				OutputFile="$(OutDir)\fs2_open_3_6_16_RC1_DEBUG_SSE.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
 				AdditionalLibraryDirectories="&quot;$(ConfigurationName)&quot;;../../oggvorbis/lib;../../openal/libs/win32;../../openal/libs/win64;"
@@ -388,7 +388,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="0"
 				AdditionalIncludeDirectories="../../code;../../libjpeg;../../libpng;../../lua;../../oggvorbis/include;../../openal/include;../../zlib;"
-				PreprocessorDefinitions="_WINDOWS;WIN32;_DEBUG;INF_BUILD;_SECURE_SCL=0;_HAS_ITERATOR_DEBUGGING=0;"
+				PreprocessorDefinitions="_WINDOWS;WIN32;_DEBUG;INF_BUILD;_SECURE_SCL=0;_HAS_ITERATOR_DEBUGGING=0;FS2_SPEECH;FS2_VOICER;"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="1"
@@ -412,7 +412,7 @@
 			/>
 			<Tool
 				Name="VCResourceCompilerTool"
-				PreprocessorDefinitions="_DEBUG;_VC08;_SSE2;"
+				PreprocessorDefinitions="_DEBUG;_VC08;_SSE2;FS2_VOICER;"
 				Culture="1033"
 			/>
 			<Tool
@@ -424,7 +424,7 @@
 				UseLibraryDependencyInputs="false"
 				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib winmm.lib vfw32.lib msacm32.lib comctl32.lib openal32.lib ogg_static.lib vorbis_static.lib vorbisfile_static.lib theora_static.lib ole32.lib advapi32.lib gdi32.lib user32.lib"
 				ShowProgress="0"
-				OutputFile="$(OutDir)\fs2_open_3_6_16_RC1d_INF.exe"
+				OutputFile="$(OutDir)\fs2_open_3_6_16_RC1_DEBUG.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
 				AdditionalLibraryDirectories="&quot;$(ConfigurationName)&quot;;../../oggvorbis/lib;../../openal/libs/win32;../../openal/libs/win64;"
@@ -501,7 +501,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="0"
 				AdditionalIncludeDirectories="../../code;../../libjpeg;../../libpng;../../lua;../../oggvorbis/include;../../openal/include;../../zlib;"
-				PreprocessorDefinitions="_WINDOWS;WIN32;_DEBUG;_SECURE_SCL=0;_HAS_ITERATOR_DEBUGGING=0;"
+				PreprocessorDefinitions="_WINDOWS;WIN32;_DEBUG;_SECURE_SCL=0;_HAS_ITERATOR_DEBUGGING=0;FS2_SPEECH;FS2_VOICER;"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="1"
@@ -525,7 +525,7 @@
 			/>
 			<Tool
 				Name="VCResourceCompilerTool"
-				PreprocessorDefinitions="_DEBUG;_VC08;"
+				PreprocessorDefinitions="_DEBUG;_VC08;FS2_VOICER;"
 				Culture="1033"
 			/>
 			<Tool
@@ -537,7 +537,7 @@
 				UseLibraryDependencyInputs="false"
 				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib winmm.lib vfw32.lib msacm32.lib comctl32.lib openal32.lib ogg_static.lib vorbis_static.lib vorbisfile_static.lib theora_static.lib ole32.lib advapi32.lib gdi32.lib user32.lib"
 				ShowProgress="0"
-				OutputFile="$(OutDir)\fs2_open_3_6_16_RC1d_SSE.exe"
+				OutputFile="$(OutDir)\fs2_open_3_6_16_RC1_DEBUG_NO-INF_SSE.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
 				AdditionalLibraryDirectories="&quot;$(ConfigurationName)&quot;;../../oggvorbis/lib;../../openal/libs/win32;../../openal/libs/win64;"
@@ -614,7 +614,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="0"
 				AdditionalIncludeDirectories="../../code;../../libjpeg;../../libpng;../../lua;../../oggvorbis/include;../../openal/include;../../zlib;"
-				PreprocessorDefinitions="_WINDOWS;WIN32;_DEBUG;_SECURE_SCL=0;_HAS_ITERATOR_DEBUGGING=0;"
+				PreprocessorDefinitions="_WINDOWS;WIN32;_DEBUG;_SECURE_SCL=0;_HAS_ITERATOR_DEBUGGING=0;FS2_SPEECH;FS2_VOICER;"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="1"
@@ -638,7 +638,7 @@
 			/>
 			<Tool
 				Name="VCResourceCompilerTool"
-				PreprocessorDefinitions="_DEBUG;_VC08;_SSE2;"
+				PreprocessorDefinitions="_DEBUG;_VC08;_SSE2;FS2_VOICER;"
 				Culture="1033"
 			/>
 			<Tool
@@ -650,7 +650,7 @@
 				UseLibraryDependencyInputs="false"
 				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib winmm.lib vfw32.lib msacm32.lib comctl32.lib openal32.lib ogg_static.lib vorbis_static.lib vorbisfile_static.lib theora_static.lib ole32.lib advapi32.lib gdi32.lib user32.lib"
 				ShowProgress="0"
-				OutputFile="$(OutDir)\fs2_open_3_6_16_RC1d.exe"
+				OutputFile="$(OutDir)\fs2_open_3_6_16_RC1_DEBUG_NO-INF.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
 				AdditionalLibraryDirectories="&quot;$(ConfigurationName)&quot;;../../oggvorbis/lib;../../openal/libs/win32;../../openal/libs/win64;"
@@ -734,7 +734,7 @@
 				OmitFramePointers="true"
 				WholeProgramOptimization="true"
 				AdditionalIncludeDirectories="../../code;../../libjpeg;../../libpng;../../lua;../../oggvorbis/include;../../openal/include;../../zlib;"
-				PreprocessorDefinitions="NDEBUG;WIN32;_WINDOWS;_SECURE_SCL=0;_HAS_ITERATOR_DEBUGGING=0;"
+				PreprocessorDefinitions="NDEBUG;WIN32;_WINDOWS;_SECURE_SCL=0;_HAS_ITERATOR_DEBUGGING=0;FS2_SPEECH;FS2_VOICER;"
 				StringPooling="true"
 				RuntimeLibrary="0"
 				BufferSecurityCheck="false"
@@ -756,7 +756,7 @@
 			/>
 			<Tool
 				Name="VCResourceCompilerTool"
-				PreprocessorDefinitions="NDEBUG;_VC08;"
+				PreprocessorDefinitions="NDEBUG;_VC08;FS2_VOICER;"
 				Culture="1033"
 			/>
 			<Tool
@@ -765,7 +765,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib winmm.lib vfw32.lib msacm32.lib comctl32.lib openal32.lib ogg_static.lib vorbis_static.lib vorbisfile_static.lib theora_static.lib"
-				OutputFile="$(OutDir)\fs2_open_3_6_16_RC1r_NO-SSE.exe"
+				OutputFile="$(OutDir)\fs2_open_3_6_16_RC1_NO-INF_NO-SSE.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
 				AdditionalLibraryDirectories="&quot;$(ConfigurationName)&quot;;../../oggvorbis/lib;../../openal/libs/win32;../../openal/libs/win64;"
@@ -851,7 +851,7 @@
 				OmitFramePointers="true"
 				WholeProgramOptimization="true"
 				AdditionalIncludeDirectories="../../code;../../libjpeg;../../libpng;../../lua;../../oggvorbis/include;../../openal/include;../../zlib;"
-				PreprocessorDefinitions="NDEBUG;WIN32;_WINDOWS;INF_BUILD;_SECURE_SCL=0;_HAS_ITERATOR_DEBUGGING=0;"
+				PreprocessorDefinitions="NDEBUG;WIN32;_WINDOWS;INF_BUILD;_SECURE_SCL=0;_HAS_ITERATOR_DEBUGGING=0;FS2_SPEECH;FS2_VOICER;"
 				StringPooling="true"
 				RuntimeLibrary="0"
 				BufferSecurityCheck="false"
@@ -873,7 +873,7 @@
 			/>
 			<Tool
 				Name="VCResourceCompilerTool"
-				PreprocessorDefinitions="NDEBUG;_VC08;"
+				PreprocessorDefinitions="NDEBUG;_VC08;FS2_VOICER;"
 				Culture="1033"
 			/>
 			<Tool
@@ -882,7 +882,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib winmm.lib vfw32.lib msacm32.lib comctl32.lib openal32.lib ogg_static.lib vorbis_static.lib vorbisfile_static.lib theora_static.lib"
-				OutputFile="$(OutDir)\fs2_open_3_6_16_RC1r_INF_NO-SSE.exe"
+				OutputFile="$(OutDir)\fs2_open_3_6_16_RC1_NO-SSE.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
 				AdditionalLibraryDirectories="&quot;$(ConfigurationName)&quot;;../../oggvorbis/lib;../../openal/libs/win32;../../openal/libs/win64;"
@@ -968,7 +968,7 @@
 				OmitFramePointers="true"
 				WholeProgramOptimization="true"
 				AdditionalIncludeDirectories="../../code;../../libjpeg;../../libpng;../../lua;../../oggvorbis/include;../../openal/include;../../zlib;"
-				PreprocessorDefinitions="NDEBUG;WIN32;_WINDOWS;INF_BUILD;_SECURE_SCL=0;_HAS_ITERATOR_DEBUGGING=0;"
+				PreprocessorDefinitions="NDEBUG;WIN32;_WINDOWS;INF_BUILD;_SECURE_SCL=0;_HAS_ITERATOR_DEBUGGING=0;FS2_SPEECH;FS2_VOICER;"
 				StringPooling="true"
 				RuntimeLibrary="0"
 				BufferSecurityCheck="false"
@@ -991,7 +991,7 @@
 			/>
 			<Tool
 				Name="VCResourceCompilerTool"
-				PreprocessorDefinitions="NDEBUG;_VC08;"
+				PreprocessorDefinitions="NDEBUG;_VC08;FS2_VOICER;"
 				Culture="1033"
 			/>
 			<Tool
@@ -1000,7 +1000,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib winmm.lib vfw32.lib msacm32.lib comctl32.lib openal32.lib ogg_static.lib vorbis_static.lib vorbisfile_static.lib theora_static.lib"
-				OutputFile="$(OutDir)\fs2_open_3_6_16_RC1r_INF_SSE.exe"
+				OutputFile="$(OutDir)\fs2_open_3_6_16_RC1_SSE.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
 				AdditionalLibraryDirectories="&quot;$(ConfigurationName)&quot;;../../oggvorbis/lib;../../openal/libs/win32;../../openal/libs/win64;"
@@ -1086,7 +1086,7 @@
 				OmitFramePointers="true"
 				WholeProgramOptimization="true"
 				AdditionalIncludeDirectories="../../code;../../libjpeg;../../libpng;../../lua;../../oggvorbis/include;../../openal/include;../../zlib;"
-				PreprocessorDefinitions="NDEBUG;WIN32;_WINDOWS;INF_BUILD;_SECURE_SCL=0;_HAS_ITERATOR_DEBUGGING=0;"
+				PreprocessorDefinitions="NDEBUG;WIN32;_WINDOWS;INF_BUILD;_SECURE_SCL=0;_HAS_ITERATOR_DEBUGGING=0;FS2_SPEECH;FS2_VOICER;"
 				StringPooling="true"
 				RuntimeLibrary="0"
 				BufferSecurityCheck="false"
@@ -1109,7 +1109,7 @@
 			/>
 			<Tool
 				Name="VCResourceCompilerTool"
-				PreprocessorDefinitions="NDEBUG;_VC08;_SSE2;"
+				PreprocessorDefinitions="NDEBUG;_VC08;_SSE2;FS2_VOICER;"
 				Culture="1033"
 			/>
 			<Tool
@@ -1118,7 +1118,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib winmm.lib vfw32.lib msacm32.lib comctl32.lib openal32.lib ogg_static.lib vorbis_static.lib vorbisfile_static.lib theora_static.lib"
-				OutputFile="$(OutDir)\fs2_open_3_6_16_RC1r_INF.exe"
+				OutputFile="$(OutDir)\fs2_open_3_6_16_RC1.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
 				AdditionalLibraryDirectories="&quot;$(ConfigurationName)&quot;;../../oggvorbis/lib;../../openal/libs/win32;../../openal/libs/win64;"
@@ -1204,7 +1204,7 @@
 				OmitFramePointers="true"
 				WholeProgramOptimization="true"
 				AdditionalIncludeDirectories="../../code;../../libjpeg;../../libpng;../../lua;../../oggvorbis/include;../../openal/include;../../zlib;"
-				PreprocessorDefinitions="NDEBUG;WIN32;_WINDOWS;_SECURE_SCL=0;_HAS_ITERATOR_DEBUGGING=0;"
+				PreprocessorDefinitions="NDEBUG;WIN32;_WINDOWS;_SECURE_SCL=0;_HAS_ITERATOR_DEBUGGING=0;FS2_SPEECH;FS2_VOICER;"
 				StringPooling="true"
 				RuntimeLibrary="0"
 				BufferSecurityCheck="false"
@@ -1227,7 +1227,7 @@
 			/>
 			<Tool
 				Name="VCResourceCompilerTool"
-				PreprocessorDefinitions="NDEBUG;_VC08;"
+				PreprocessorDefinitions="NDEBUG;_VC08;FS2_VOICER;"
 				Culture="1033"
 			/>
 			<Tool
@@ -1236,7 +1236,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib winmm.lib vfw32.lib msacm32.lib comctl32.lib openal32.lib ogg_static.lib vorbis_static.lib vorbisfile_static.lib theora_static.lib"
-				OutputFile="$(OutDir)\fs2_open_3_6_16_RC1r_SSE.exe"
+				OutputFile="$(OutDir)\fs2_open_3_6_16_RC1_NO-INF_SSE.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
 				AdditionalLibraryDirectories="&quot;$(ConfigurationName)&quot;;../../oggvorbis/lib;../../openal/libs/win32;../../openal/libs/win64;"
@@ -1322,7 +1322,7 @@
 				OmitFramePointers="true"
 				WholeProgramOptimization="true"
 				AdditionalIncludeDirectories="../../code;../../libjpeg;../../libpng;../../lua;../../oggvorbis/include;../../openal/include;../../zlib;"
-				PreprocessorDefinitions="NDEBUG;WIN32;_WINDOWS;_SECURE_SCL=0;_HAS_ITERATOR_DEBUGGING=0;"
+				PreprocessorDefinitions="NDEBUG;WIN32;_WINDOWS;_SECURE_SCL=0;_HAS_ITERATOR_DEBUGGING=0;FS2_SPEECH;FS2_VOICER;"
 				StringPooling="true"
 				RuntimeLibrary="0"
 				BufferSecurityCheck="false"
@@ -1345,7 +1345,7 @@
 			/>
 			<Tool
 				Name="VCResourceCompilerTool"
-				PreprocessorDefinitions="NDEBUG;_VC08;_SSE2;"
+				PreprocessorDefinitions="NDEBUG;_VC08;_SSE2;FS2_VOICER;"
 				Culture="1033"
 			/>
 			<Tool
@@ -1354,7 +1354,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib winmm.lib vfw32.lib msacm32.lib comctl32.lib openal32.lib ogg_static.lib vorbis_static.lib vorbisfile_static.lib theora_static.lib"
-				OutputFile="$(OutDir)\fs2_open_3_6_16_RC1r.exe"
+				OutputFile="$(OutDir)\fs2_open_3_6_16_RC1_NO-INF.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
 				AdditionalLibraryDirectories="&quot;$(ConfigurationName)&quot;;../../oggvorbis/lib;../../openal/libs/win32;../../openal/libs/win64;"
