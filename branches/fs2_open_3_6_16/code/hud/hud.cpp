@@ -451,6 +451,10 @@ void HudGauge::updateCustomGaugeFrame(int frame_offset)
 	if(!custom_gauge) {
 		return;
 	}
+	
+	if (frame_offset < 0 ||frame_offset > custom_frame.num_frames) {
+		return;
+	}
 
 	custom_frame_offset = frame_offset;
 }
@@ -1656,7 +1660,7 @@ void hud_render_preprocess(float frametime)
 	// process asteroid brackets if necessary
 	hud_show_asteroid_brackets();
 
-	// process targetting data around the current target
+	// process targeting data around the current target
 	hud_show_targeting_gauges(frametime);
 
 	// process brackets and distance to remote detonate missile

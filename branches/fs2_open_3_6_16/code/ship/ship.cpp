@@ -8962,8 +8962,13 @@ void change_ship_type(int n, int ship_type, int by_sexp)
 
 	Assert( n >= 0 && n < MAX_SHIPS );
 	sp = &Ships[n];
-	sip = &(Ship_info[ship_type]);
+
+	// do a quick out if we're already using the new ship class
+	if (sp->ship_info_index == ship_type)
+		return;
+
 	swp = &sp->weapons;
+	sip = &(Ship_info[ship_type]);
 	sip_orig = &Ship_info[sp->ship_info_index];
 	objp = &Objects[sp->objnum];
 	p_objp = mission_parse_get_parse_object(sp->ship_name);
@@ -9042,20 +9047,6 @@ void change_ship_type(int n, int ship_type, int by_sexp)
 		ss = GET_NEXT(ss);
 	}
 
-	// make sure that shields are disabled/enabled if they need to be - Chief1983
-	if (!Fred_running) {
-		if ((p_objp->flags2 & P2_OF_FORCE_SHIELDS_ON) && (sp->ship_max_shield_strength > 0.0f)) {
-			objp->flags &= ~OF_NO_SHIELDS;
-		} else if ((p_objp->flags & P_OF_NO_SHIELDS) || (sp->ship_max_shield_strength == 0.0f)) {
-			objp->flags |= OF_NO_SHIELDS;
-		// Since there's not a mission flag set to be adjusting this, see if there was a change from a ship that normally has shields to one that doesn't, and vice versa
-		} else if (!(sip_orig->flags2 & SIF2_INTRINSIC_NO_SHIELDS) && (sip->flags2 & SIF2_INTRINSIC_NO_SHIELDS)) {
-			objp->flags |= OF_NO_SHIELDS;
-		} else if ((sip_orig->flags2 & SIF2_INTRINSIC_NO_SHIELDS) && !(sip->flags2 & SIF2_INTRINSIC_NO_SHIELDS) && (sp->ship_max_shield_strength > 0.0f)) {
-			objp->flags &= ~OF_NO_SHIELDS;
-		}
-	}
-
 	// point to new ship data
 	ship_model_change(n, ship_type);
 	sp->ship_info_index = ship_type;
@@ -9097,6 +9088,21 @@ void change_ship_type(int n, int ship_type, int by_sexp)
 	// Goober5000: div-0 checks
 	Assert(sp->ship_max_hull_strength > 0.0f);
 	Assert(objp->hull_strength > 0.0f);
+
+	// Mantis 2763: moved down to have access to the right ship_max_shield_strength value
+	// make sure that shields are disabled/enabled if they need to be - Chief1983
+	if (!Fred_running) {
+		if ((p_objp->flags2 & P2_OF_FORCE_SHIELDS_ON) && (sp->ship_max_shield_strength > 0.0f)) {
+			objp->flags &= ~OF_NO_SHIELDS;
+		} else if ((p_objp->flags & P_OF_NO_SHIELDS) || (sp->ship_max_shield_strength == 0.0f)) {
+			objp->flags |= OF_NO_SHIELDS;
+		// Since there's not a mission flag set to be adjusting this, see if there was a change from a ship that normally has shields to one that doesn't, and vice versa
+		} else if (!(sip_orig->flags2 & SIF2_INTRINSIC_NO_SHIELDS) && (sip->flags2 & SIF2_INTRINSIC_NO_SHIELDS)) {
+			objp->flags |= OF_NO_SHIELDS;
+		} else if ((sip_orig->flags2 & SIF2_INTRINSIC_NO_SHIELDS) && !(sip->flags2 & SIF2_INTRINSIC_NO_SHIELDS) && (sp->ship_max_shield_strength > 0.0f)) {
+			objp->flags &= ~OF_NO_SHIELDS;
+		}
+	}
 
 	// niffiwan: set new armor types
 	sp->armor_type_idx = sip->armor_type_idx;

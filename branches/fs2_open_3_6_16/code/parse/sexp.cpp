@@ -11547,7 +11547,7 @@ void sexp_transfer_cargo(int n)
 	// Don't give warning for large ships (cruiser on up) 
 	if (! (Ship_info[Ships[shipnum2].ship_info_index].flags & (SIF_BIG_SHIP | SIF_HUGE_SHIP)) ) {
 		if ( stricmp(Cargo_names[Ships[shipnum2].cargo1 & CARGO_INDEX_MASK], "nothing") ) {
-			Warning(LOCATION, "Transfering cargo to %s which already\nhas cargo %s.\nCargo will be replaced", Ships[shipnum2].ship_name, Cargo_names[Ships[shipnum2].cargo1 & CARGO_INDEX_MASK] );
+			Warning(LOCATION, "Transferring cargo to %s which already\nhas cargo %s.\nCargo will be replaced", Ships[shipnum2].ship_name, Cargo_names[Ships[shipnum2].cargo1 & CARGO_INDEX_MASK] );
 		}
 	}
 #endif
@@ -12544,6 +12544,7 @@ void multi_sexp_deal_with_ship_flag()
 
 void sexp_alter_ship_flag_helper(object_ship_wing_point_team &oswpt, bool future_ships, int object_flag, int object_flag2, int ship_flag, int ship_flag2, int parse_obj_flag, int parse_obj_flag2, int ai_flag, int ai_flag2, bool set_flag)
 {
+	int i;
 	ship_obj	*so;
 	object_ship_wing_point_team oswpt2;
 	p_object *p_objp;
@@ -12595,7 +12596,7 @@ void sexp_alter_ship_flag_helper(object_ship_wing_point_team &oswpt, bool future
 				}
 			}
 
-			for (int i = 0; i < oswpt.wingp->current_count; i++) {
+			for (i = 0; i < oswpt.wingp->current_count; i++) {
 				object_ship_wing_point_team_set_ship(&oswpt2, &Ships[oswpt.wingp->ship_index[i]], future_ships); 
 				sexp_alter_ship_flag_helper(oswpt2, future_ships, object_flag, object_flag2, ship_flag, ship_flag2, parse_obj_flag, parse_obj_flag2, ai_flag, ai_flag2, set_flag);
 			}
@@ -12883,6 +12884,7 @@ void sexp_alter_ship_flag(int node)
 
 void multi_sexp_alter_ship_flag() 
 {
+	int i;
 	int object_flag = 0;
 	int object_flag2 = 0; 
 	int ship_flag = 0; 
@@ -12935,7 +12937,7 @@ void multi_sexp_alter_ship_flag()
 				case OSWPT_TYPE_WING_NOT_PRESENT:
 				case OSWPT_TYPE_WING:
 					multi_get_ushort(wing_sig);
-					for (int i = 0; i < Num_wings; i++) {
+					for (i = 0; i < Num_wings; i++) {
 						if (Wings[i].net_signature == wing_sig) {
 							oswpt.wingp = &Wings[i];
 							break;
@@ -13685,7 +13687,7 @@ void sexp_turret_protect_ships(int n, bool flag)
 		Warning(LOCATION, "Invalid turret type '%s'!", turret_type);
 }
 
-// Goober5000 - sets the "dont collide invisible" flag on a list of ships
+// Goober5000 - sets the "don't collide invisible" flag on a list of ships
 void sexp_dont_collide_invisible(int n, bool dont_collide)
 {
 	sexp_deal_with_ship_flag(n, true, 0, 0, 0, SF2_DONT_COLLIDE_INVIS, 0, P_SF2_DONT_COLLIDE_INVIS, dont_collide);
@@ -16019,27 +16021,11 @@ void parse_copy_damage(p_object *target_pobjp, ship *source_shipp)
 
 	// copy hull...
 	target_pobjp->special_hitpoints = source_shipp->special_hitpoints;
-	if (Ship_info[source_shipp->ship_info_index].max_hull_strength == 0.0f)
-	{
-		Warning(LOCATION, "Why does %s have a maximum hull strength of 0?", Ship_info[source_shipp->ship_info_index].name);
-		target_pobjp->ship_max_hull_strength_multiplier = 1.0f;
-	}
-	else
-	{
-		target_pobjp->ship_max_hull_strength_multiplier = source_shipp->ship_max_hull_strength / Ship_info[source_shipp->ship_info_index].max_hull_strength;
-	}
+	target_pobjp->ship_max_hull_strength = source_shipp->ship_max_hull_strength;
 	target_pobjp->initial_hull = fl2i(get_hull_pct(source_objp) * 100.0f);
 
 	// ...and shields
-	if (Ship_info[source_shipp->ship_info_index].max_shield_strength == 0.0f)
-	{
-		// [see above comment] this is okay because a ship can have no shields
-		target_pobjp->ship_max_shield_strength_multiplier = 1.0f;
-	}
-	else
-	{
-		target_pobjp->ship_max_shield_strength_multiplier = source_shipp->ship_max_shield_strength / Ship_info[source_shipp->ship_info_index].max_shield_strength;
-	}
+	target_pobjp->ship_max_shield_strength = source_shipp->ship_max_shield_strength;
 	target_pobjp->initial_shields = fl2i(get_shield_pct(source_objp) * 100.0f);
 
 
@@ -29670,9 +29656,8 @@ sexp_help_struct Sexp_help[] = {
 		"\t2 (optional):\tShip to undock from.  If none is specified, the code will pick the first docked ship." },
 
 	{ OP_AI_WARP_OUT, "Ai-warp-out (Ship/Wing Goal)\r\n"
-		"\tCauses the specified ship/wing to warp out of the mission.  Currently, the ship will "
-		"warp out at its current location.  This behavior will change.  Currently, the first "
-		"argument means nothing.\r\n\r\n"
+		"\tCauses the specified ship/wing to immediately warp out of the mission, from its current location.  "
+		"It will warp even if its departure cue is specified as a hangar bay.\r\n\r\n"
 		"Takes 2 arguments...\r\n"
 		"\t1:\tName of waypoint path to follow to warp out (not used).\r\n"
 		"\t2:\tGoal priority (number between 0 and 200. Player orders have a priority of 90-100)." },
@@ -29908,8 +29893,7 @@ sexp_help_struct Sexp_help[] = {
 
 	// Karajorma
 	{ OP_STRING_TO_INT, "string-to-int\r\n"
-		"\tConverts a string into an integer. The string must only contain numeric characters "
-		"or zero is returned \r\n"
+		"\tConverts a string into an integer.  All non-numeric characters (except for the negative sign) will be ignored, as will any fractional part of a decimal number.  This behavior is somewhat different than the atoi() function in C or C++, which will abort if it encounters any non-numeric character.  For a string like \"turret31\", this sexp will return 31, but atoi() will return 0.\r\n\r\n"
 		"Takes 1 argument...\r\n"
 		"\t1:\tString to convert" },
 
@@ -29972,10 +29956,10 @@ sexp_help_struct Sexp_help[] = {
 		"Takes 1 argument...\r\n"
 		"\t1:\tName of medal to grant to player." },
 
-	{ OP_GOOD_SECONDARY_TIME, "Set prefered secondary weapons\r\n"
-		"\tThis sexpression is used to inform the AI about prefered secondary weapons to "
+	{ OP_GOOD_SECONDARY_TIME, "Set preferred secondary weapons\r\n"
+		"\tThis sexpression is used to inform the AI about preferred secondary weapons to "
 		"fire during combat.  When this expression is evaulated, any AI ships of the given "
-		"team prefer to fire the given weapon at the given ship. (Prefered over other "
+		"team prefer to fire the given weapon at the given ship. (Preferred over other "
 		"secondary weapons)\r\n\r\n"
 		"Takes 4 argument...\r\n"
 		"\t1:\tTeam name which will prefer firing given weapon\r\n"
@@ -30181,12 +30165,12 @@ sexp_help_struct Sexp_help[] = {
 		"\t1+:\tName of ships to make invulnerable to weapons." },
 
 	{ OP_SHIP_BOMB_TARGETABLE, "ship-targetable-as-bomb\r\n"
-		"\tCauses the ships listed in this sexpression to be targetable with bomb targetting key.\r\n\r\n"
+		"\tCauses the ships listed in this sexpression to be targetable with bomb targeting key.\r\n\r\n"
 		"Takes 1 or more arguments...\r\n"
 		"\t1+:\tName of ships to make targetable with bomb targeting key." },
 
 	{ OP_SHIP_BOMB_UNTARGETABLE, "ship-untargetable-as-bomb\r\n"
-		"\tCauses the ships listed in this sexpression to not be targetable with bomb targetting key.\r\n\r\n"
+		"\tCauses the ships listed in this sexpression to not be targetable with bomb targeting key.\r\n\r\n"
 		"Takes 1 or more arguments...\r\n"
 		"\t1+:\tName of ships to make nontargetable with bomb targeting key." },
 
@@ -30457,14 +30441,14 @@ sexp_help_struct Sexp_help[] = {
 		"\tAll:\tList of ships on which to unset the vaporize flag" },
 
 	{ OP_DONT_COLLIDE_INVISIBLE, "don't-collide-invisible\r\n"
-		"\tSets the \"dont collide invisible\" flag on a list of ships.\r\n"
+		"\tSets the \"don't collide invisible\" flag on a list of ships.\r\n"
 		"Takes 1 or more arguments...\r\n"
-		"\tAll:\tList of ships on which to set the \"dont collide invisible\" flag" },
+		"\tAll:\tList of ships on which to set the \"don't collide invisible\" flag" },
 
 	{ OP_COLLIDE_INVISIBLE, "collide-invisible\r\n"
-		"\tUnsets the \"dont collide invisible\" flag on a list of ships.\r\n"
+		"\tUnsets the \"don't collide invisible\" flag on a list of ships.\r\n"
 		"Takes 1 or more arguments...\r\n"
-		"\tAll:\tList of ships on which to unset the \"dont collide invisible\" flag" },
+		"\tAll:\tList of ships on which to unset the \"don't collide invisible\" flag" },
 
 	{ OP_SET_MOBILE, "set-mobile\r\n"
 		"\tAllows the specified ship(s) to move.  Opposite of set-immobile.\r\n"
