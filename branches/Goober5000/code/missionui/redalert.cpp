@@ -261,7 +261,7 @@ float Ra_flash_time = 0.0f;
 int Ra_flash_up = 0;
 void red_alert_blit_title()
 {
-	char *str = XSTR("Incoming Transmission", 1406);
+	const char *str = XSTR("Incoming Transmission", 1406);
 	int w, h;
 
 	// get the string size	
@@ -391,7 +391,7 @@ void red_alert_do_frame(float frametime)
 	if (!(Game_mode & GM_MULTIPLAYER)) {
 		if (The_mission.flags & MISSION_FLAG_NO_BRIEFING)
 		{
-			commit_pressed();
+			red_alert_button_pressed(RA_CONTINUE);
 			return;
 		}
 	}
@@ -590,7 +590,11 @@ void red_alert_store_subsys_status(red_alert_ship_status *ras, ship *shipp)
 }
 
 
-// Record the current state of the players wingman
+/*
+ * Record the current state of the players wingman & ships with the "red-alert-carry" flag
+ * Wingmen without the red-alert-carry flag are only stored if they survive
+ * dead wingmen must still be handled in red_alert_bash_wingman_status
+ */
 void red_alert_store_wingman_status()
 {
 	ship				*shipp;
@@ -681,7 +685,11 @@ void red_alert_delete_ship(ship *shipp, int ship_state)
 	}
 }
 
-// Take the stored wingman status information, and adjust the player wing ships accordingly
+/*
+ * Take the red alert status information, and adjust the red alert ships accordingly
+ * "red alert ships" are wingmen and any ship with the red-alert-carry flag
+ * Wingmen without red alert data still need to be handled / removed
+ */
 void red_alert_bash_wingman_status()
 {
 	int				i;
@@ -714,7 +722,7 @@ void red_alert_bash_wingman_status()
 		}
 
 		int found_match = 0;
-		int ship_state = 0;
+		int ship_state = RED_ALERT_DESTROYED_SHIP_CLASS;
 
 		for ( i = 0; i < (int)Red_alert_wingman_status.size(); i++ ) {
 			ras = &Red_alert_wingman_status[i];
@@ -742,7 +750,6 @@ void red_alert_bash_wingman_status()
 
 			} else if ( !stricmp(ras->name.c_str(), shipp->ship_name) && ( (ras->ship_class == RED_ALERT_DESTROYED_SHIP_CLASS) || (ras->ship_class == RED_ALERT_PLAYER_DEL_SHIP_CLASS) ) ) {
 				ship_state = ras->ship_class;
-				continue;
 			}
 		}
 

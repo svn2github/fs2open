@@ -126,6 +126,7 @@ Flag exe_params[] =
 	{ "-fxaa",				"Enable FXAA anti-aliasing",				true,	0,					EASY_DEFAULT,		"Graphics",		"http://www.hard-light.net/wiki/index.php/Command-Line_Reference#-fxaa" },
 	{ "-nolightshafts",		"Disable lightshafts",						true,	0,					EASY_DEFAULT,		"Graphics",		"http://www.hard-light.net/wiki/index.php/Command-Line_Reference#-flightshaftsoff"},
 
+	{ "-img2dds",			"Compress non-compressed images",			true,	0,					EASY_DEFAULT,		"Game Speed",	"http://www.hard-light.net/wiki/index.php/Command-Line_Reference#-img2dds", },
 	{ "-no_vsync",			"Disable vertical sync",					true,	0,					EASY_DEFAULT,		"Game Speed",	"http://www.hard-light.net/wiki/index.php/Command-Line_Reference#-no_vsync", },
 	{ "-cache_bitmaps",		"Cache bitmaps between missions",			true,	0,					EASY_DEFAULT_MEM,	"Game Speed",	"http://www.hard-light.net/wiki/index.php/Command-Line_Reference#-cache_bitmaps", },
 
@@ -199,7 +200,8 @@ Flag exe_params[] =
  #ifdef SCP_UNIX
 	{ "-nograb",			"Don't grab mouse/keyboard in a window",	true,	0,					EASY_DEFAULT,		"Dev Tool",		"http://www.hard-light.net/wiki/index.php/Command-Line_Reference#-nograb", },
  #endif
-	{ "-reparse_mainhall", "Reparse mainhall.tbl when loading halls", false, 0, EASY_DEFAULT, "Dev Tool", "http://www.hard-light.net/wiki/index.php/Command-Line_Reference#-reparse_mainhall", },
+	{ "-reparse_mainhall",	"Reparse mainhall.tbl when loading halls",	false,	0,					EASY_DEFAULT,		"Dev Tool",		"http://www.hard-light.net/wiki/index.php/Command-Line_Reference#-reparse_mainhall", },
+	{ "-profile_frame_time","Profile engine subsystems",				true,	0,					EASY_DEFAULT,		"Dev Tool",		"http://www.hard-light.net/wiki/index.php/Command-Line_Reference#-profile_frame_timings", },
 };
 
 // here are the command line parameters that we will be using for FreeSpace
@@ -301,10 +303,12 @@ extern bool ls_force_off;
 
 // Game Speed related
 cmdline_parm cache_bitmaps_arg("-cache_bitmaps", NULL);	// Cmdline_cache_bitmaps
+cmdline_parm img2dds_arg("-img2dds", NULL);			// Cmdline_img2dds
 cmdline_parm no_fpscap("-no_fps_capping", NULL);	// Cmdline_NoFPSCap
 cmdline_parm no_vsync_arg("-no_vsync", NULL);		// Cmdline_no_vsync
 
 int Cmdline_cache_bitmaps = 0;	// caching of bitmaps between missions (faster loads, can hit swap on reload with <512 Meg RAM though) - taylor
+int Cmdline_img2dds = 0;
 int Cmdline_NoFPSCap = 0; // Disable FPS capping - kazan
 int Cmdline_no_vsync = 0;
 
@@ -420,6 +424,7 @@ cmdline_parm parse_cmdline_only(PARSE_COMMAND_LINE_STRING, NULL);
 cmdline_parm no_grab("-nograb", NULL);				// Cmdline_no_grab
 #endif
 cmdline_parm reparse_mainhall_arg("-reparse_mainhall", NULL); //Cmdline_reparse_mainhall
+cmdline_parm frame_profile_arg("-profile_frame_time", NULL); //Cmdline_frame_profile
 
 char *Cmdline_start_mission = NULL;
 int Cmdline_old_collision_sys = 0;
@@ -443,6 +448,7 @@ int Cmdline_verify_vps = 0;
 int Cmdline_no_grab = 0;
 #endif
 int Cmdline_reparse_mainhall = 0;
+bool Cmdline_frame_profile = false;
 
 // Other
 cmdline_parm get_flags_arg("-get_flags", NULL);
@@ -1371,6 +1377,9 @@ bool SetCmdlineParams()
 		Cmdline_no_di_mouse = 1;
 	}
 
+	if ( img2dds_arg.found() )
+		Cmdline_img2dds = 1;
+
 	if ( glow_arg.found() )
 		Cmdline_glow = 0;
 
@@ -1518,6 +1527,11 @@ bool SetCmdlineParams()
 	if( reparse_mainhall_arg.found() )
 	{
 		Cmdline_reparse_mainhall = 1;
+	}
+
+	if (frame_profile_arg.found() )
+	{
+		Cmdline_frame_profile = true;
 	}
 
 	//Deprecated flags - CommanderDJ

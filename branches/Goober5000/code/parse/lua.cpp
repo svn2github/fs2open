@@ -2736,7 +2736,7 @@ ADE_VIRTVAR(RotationalVelocityDamping, l_Physics, "number", "Rotational damping,
 	return ade_set_args(L, "f", pih->pi->rotdamp);
 }
 
-ADE_VIRTVAR(RotationalVelocityDesired, l_Physics, "lvector", "Desired rotational velocity", "number", "Desired rotational velocity, or 0 if handle is invalid")
+ADE_VIRTVAR(RotationalVelocityDesired, l_Physics, "vector", "Desired rotational velocity", "vector", "Desired rotational velocity, or null vector if handle is invalid")
 {
 	physics_info_h *pih;
 	vec3d *v3=NULL;
@@ -4753,7 +4753,7 @@ ADE_FUNC(__tostring, l_Object, NULL, "Returns name of object (if any)", "string"
 			sprintf(buf, "%s projectile", Weapon_info[Weapons[objh->objp->instance].weapon_info_index].name);
 			break;
 		default:
-			sprintf(buf, "Object %d [%d]", OBJ_INDEX(objh->objp), objh->sig);
+			sprintf(buf, "Object %ld [%d]", OBJ_INDEX(objh->objp), objh->sig);
 	}
 
 	return ade_set_args(L, "s", buf);
@@ -5080,6 +5080,7 @@ ADE_FUNC(checkRayCollision, l_Object, "vector Start Point, vector End Point, [bo
 	}
 
 	mc_info hull_check;
+	mc_info_init(&hull_check);
 
 	hull_check.model_num = model_num;
 	hull_check.model_instance_num = model_instance_num;
@@ -6554,7 +6555,8 @@ ADE_VIRTVAR(AmmoLeft, l_WeaponBank, "number", "Ammo left for the current bank", 
 	return ade_set_error(L, "i", 0);
 }
 
-ADE_VIRTVAR(AmmoMax, l_WeaponBank, "number", "Maximum ammo for the current bank", "number", "Ammo capacity, or 0 if handle is invalid")
+ADE_VIRTVAR(AmmoMax, l_WeaponBank, "number", "Maximum ammo for the current bank<br>"
+			"<b>Note:</b> Setting this value actually sets the <i>capacity</i> of the weapon bank. To set the actual maximum ammunition use <tt>AmmoMax = <amount> * class.CargoSize</tt>", "number", "Ammo capacity, or 0 if handle is invalid")
 {
 	ship_bank_h *bh = NULL;
 	int ammomax;
@@ -6567,23 +6569,35 @@ ADE_VIRTVAR(AmmoMax, l_WeaponBank, "number", "Maximum ammo for the current bank"
 	switch(bh->type)
 	{
 		case SWH_PRIMARY:
-			if(ADE_SETTING_VAR && ammomax > -1) {
-				bh->sw->primary_bank_start_ammo[bh->bank] = ammomax;
-			}
+			{
+				if(ADE_SETTING_VAR && ammomax > -1) {
+					bh->sw->primary_bank_capacity[bh->bank] = ammomax;
+				}
 
-			return ade_set_args(L, "i", bh->sw->primary_bank_start_ammo[bh->bank]);
+				int weapon_class = bh->sw->primary_bank_weapons[bh->bank];
+
+				Assert(bh->objp->type == OBJ_SHIP);
+
+				return ade_set_args(L, "i", get_max_ammo_count_for_primary_bank(Ships[bh->objp->instance].ship_info_index, bh->bank, weapon_class));
+			}
 		case SWH_SECONDARY:
-			if(ADE_SETTING_VAR && ammomax > -1) {
-				bh->sw->secondary_bank_start_ammo[bh->bank] = ammomax;
-			}
+			{
+				if(ADE_SETTING_VAR && ammomax > -1) {
+					bh->sw->secondary_bank_capacity[bh->bank] = ammomax;
+				}
 
-			return ade_set_args(L, "i", bh->sw->secondary_bank_start_ammo[bh->bank]);
+				int weapon_class = bh->sw->secondary_bank_weapons[bh->bank];
+
+				Assert(bh->objp->type == OBJ_SHIP);
+
+				return ade_set_args(L, "i", get_max_ammo_count_for_bank(Ships[bh->objp->instance].ship_info_index, bh->bank, weapon_class));
+			}
 		case SWH_TERTIARY:
 			if(ADE_SETTING_VAR && ammomax > -1) {
-				bh->sw->tertiary_bank_ammo = ammomax;
+				bh->sw->tertiary_bank_capacity = ammomax;
 			}
 
-			return ade_set_args(L, "i", bh->sw->tertiary_bank_start_ammo);
+			return ade_set_args(L, "i", bh->sw->tertiary_bank_capacity);
 	}
 
 	return ade_set_error(L, "i", 0);
@@ -7976,6 +7990,28 @@ ADE_VIRTVAR(WeaponEnergyMax, l_Ship, "number", "Maximum weapon energy", "number"
 	return ade_set_args(L, "f", sip->max_weapon_reserve);
 }
 
+ADE_VIRTVAR(AutoaimFOV, l_Ship, "number", "FOV of ship's autoaim, if any", "number", "FOV (in degrees), or 0 if ship uses no autoaim or if handle is invalid")
+{
+	object_h *objh;
+	float fov = -1;
+	if(!ade_get_args(L, "o|f", l_Ship.GetPtr(&objh), &fov))
+		return ade_set_error(L, "f", 0.0f);
+
+	if(!objh->IsValid())
+		return ade_set_error(L, "f", 0.0f);
+
+	ship *shipp = &Ships[objh->objp->instance];
+
+	if(ADE_SETTING_VAR && fov >= 0.0f) {
+		if (fov > 180.0)
+			fov = 180.0;
+
+		shipp->autoaim_fov = fov * PI / 180.0f;
+	}
+
+	return ade_set_args(L, "f", shipp->autoaim_fov * 180.0f / PI);
+}
+
 ADE_VIRTVAR(PrimaryTriggerDown, l_Ship, "boolean", "Determines if primary trigger is pressed or not", "boolean", "True if pressed, false if not, nil if ship handle is invalid")
 {
 	object_h *objh;
@@ -8863,6 +8899,23 @@ ADE_FUNC(warpOut, l_Ship, NULL, "Warps ship out", "boolean", "True if successful
 		return ADE_RETURN_NIL;
 
 	shipfx_warpout_start(objh->objp);
+
+	return ADE_RETURN_TRUE;
+}
+
+ADE_FUNC(canWarp, l_Ship, NULL, "Checks whether ship has a working subspace drive and is allowed to use it", "boolean", "True if successful, or nil if ship handle is invalid")
+{
+	object_h *objh;
+	if(!ade_get_args(L, "o", l_Ship.GetPtr(&objh)))
+		return ADE_RETURN_NIL;
+
+	if(!objh->IsValid())
+		return ADE_RETURN_NIL;
+
+	ship *shipp = &Ships[objh->objp->instance];
+	if(shipp->flags & SF2_NO_SUBSPACE_DRIVE){
+		return ADE_RETURN_FALSE;
+	}
 
 	return ADE_RETURN_TRUE;
 }
@@ -11026,7 +11079,8 @@ ADE_FUNC(playInterfaceSound, l_Audio, "Sound index", "Plays a sound from #Interf
 	return ade_set_args(L, "b", idx > -1);
 }
 
-ADE_FUNC(playMusic, l_Audio, "string Filename, [float volume = 1.0, bool looping = true]", "Plays a music file using FS2Open's builtin music system. Volume should be in the 0.0 - 1.0 range, and is capped at 1.0. Files passed to this function are looped by default.", "number", "Audiohandle of the created audiostream, or -1 on failure")
+extern float Master_event_music_volume;
+ADE_FUNC(playMusic, l_Audio, "string Filename, [float volume = 1.0, bool looping = true]", "Plays a music file using FS2Open's builtin music system. Volume is currently ignored, uses players music volume setting. Files passed to this function are looped by default.", "number", "Audiohandle of the created audiostream, or -1 on failure")
 {
 	char *s;
 	float volume = 1.0f;
@@ -11038,7 +11092,8 @@ ADE_FUNC(playMusic, l_Audio, "string Filename, [float volume = 1.0, bool looping
 	if(ah < 0)
 		return ade_set_error(L, "i", -1);
 
-	CLAMP(volume, 0.0f, 1.0f);
+	// didn't remove the volume parameter because it'll break the API
+	volume = Master_event_music_volume;
 
 	audiostream_play(ah, volume, loop ? 1 : 0);
 	return ade_set_args(L, "i", ah);
@@ -12593,8 +12648,8 @@ ADE_FUNC(drawString, l_Graphics, "string Message, [number X1, number Y1, number 
 	}
 	else
 	{
-		int *linelengths = new int[MAX_TEXT_LINES];
-		char **linestarts = new char*[MAX_TEXT_LINES];
+		int linelengths[MAX_TEXT_LINES];
+		const char *linestarts[MAX_TEXT_LINES];
 
 		num_lines = split_str(s, x2-x, linelengths, linestarts, MAX_TEXT_LINES);
 
@@ -12606,26 +12661,24 @@ ADE_FUNC(drawString, l_Graphics, "string Message, [number X1, number Y1, number 
 
 		y2 = y;
 
-		char rep;
-		char *reptr;
 		for(int i = 0; i < num_lines; i++)
 		{
 			//Increment line height
 			y2 += line_ht;
-			//WMC - rather than make a new string each line, set the right character to null
-			reptr = &linestarts[i][linelengths[i]];
-			rep = *reptr;
-			*reptr = '\0';
+
+			//Contrary to WMC's previous comment, let's make a new string each line
+			int len = linelengths[i];
+			char *buf = new char[len+1];
+			strncpy(buf, linestarts[i], len);
+			buf[len] = '\0';
 
 			//Draw the string
-			gr_string(x,y2,linestarts[i],false);
+			gr_string(x,y2,buf,false);
 
-			//Set character back
-			*reptr = rep;
+			//Free the string we made
+			delete[] buf;
 		}
 
-		delete[] linelengths;
-		delete[] linestarts;
 		NextDrawStringPos[1] = y2+gr_get_font_height();
 	}
 	return ade_set_error(L, "i", num_lines);
@@ -13667,7 +13720,7 @@ ADE_FUNC(startMission, l_Mission, "[Filename or MISSION_* enumeration, Briefing 
 	} else {
 		// due safety checks of the game_start_mission() function allow only main menu for now.
 		if (gameseq_get_state(gameseq_get_depth()) == GS_STATE_MAIN_MENU) {
-			strncpy( Game_current_mission_filename, str, MAX_FILENAME_LEN );
+			strcpy_s( Game_current_mission_filename, str );
 			if (b == true) {
 				// start mission - go via briefing screen
 				gameseq_post_event(GS_EVENT_START_GAME);
