@@ -126,7 +126,6 @@ Flag exe_params[] =
 	{ "-fxaa",				"Enable FXAA anti-aliasing",				true,	0,					EASY_DEFAULT,		"Graphics",		"http://www.hard-light.net/wiki/index.php/Command-Line_Reference#-fxaa" },
 	{ "-nolightshafts",		"Disable lightshafts",						true,	0,					EASY_DEFAULT,		"Graphics",		"http://www.hard-light.net/wiki/index.php/Command-Line_Reference#-flightshaftsoff"},
 
-	{ "-img2dds",			"Compress non-compressed images",			true,	0,					EASY_DEFAULT,		"Game Speed",	"http://www.hard-light.net/wiki/index.php/Command-Line_Reference#-img2dds", },
 	{ "-no_vsync",			"Disable vertical sync",					true,	0,					EASY_DEFAULT,		"Game Speed",	"http://www.hard-light.net/wiki/index.php/Command-Line_Reference#-no_vsync", },
 	{ "-cache_bitmaps",		"Cache bitmaps between missions",			true,	0,					EASY_DEFAULT_MEM,	"Game Speed",	"http://www.hard-light.net/wiki/index.php/Command-Line_Reference#-cache_bitmaps", },
 
@@ -265,7 +264,7 @@ cmdline_parm noscalevid_arg("-noscalevid", NULL);				// Cmdline_noscalevid  -- d
 cmdline_parm spec_arg("-nospec", NULL);							// Cmdline_spec  -- 
 cmdline_parm noemissive_arg("-no_emissive_light", NULL);		// Cmdline_no_emissive  -- don't use emissive light in OGL
 cmdline_parm normal_arg("-nonormal", NULL);						// Cmdline_normal  -- disable normal mapping
-cmdline_parm height_arg("-height", NULL);						// Cmdline_height  -- enable support for parallax mapping
+cmdline_parm height_arg("-noheight", NULL);						// Cmdline_height  -- enable support for parallax mapping
 cmdline_parm enable_3d_shockwave_arg("-3dshockwave", NULL);
 cmdline_parm softparticles_arg("-soft_particles", NULL);
 cmdline_parm postprocess_arg("-post_process", NULL);
@@ -288,7 +287,7 @@ int Cmdline_noscalevid = 0;
 int Cmdline_spec = 1;
 int Cmdline_no_emissive = 0;
 int Cmdline_normal = 1;
-int Cmdline_height = 0;
+int Cmdline_height = 1;
 int Cmdline_enable_3d_shockwave = 0;
 int Cmdline_softparticles = 0;
 int Cmdline_postprocess = 0;
@@ -301,12 +300,10 @@ extern bool ls_force_off;
 
 // Game Speed related
 cmdline_parm cache_bitmaps_arg("-cache_bitmaps", NULL);	// Cmdline_cache_bitmaps
-cmdline_parm img2dds_arg("-img2dds", NULL);			// Cmdline_img2dds
 cmdline_parm no_fpscap("-no_fps_capping", NULL);	// Cmdline_NoFPSCap
 cmdline_parm no_vsync_arg("-no_vsync", NULL);		// Cmdline_no_vsync
 
 int Cmdline_cache_bitmaps = 0;	// caching of bitmaps between missions (faster loads, can hit swap on reload with <512 Meg RAM though) - taylor
-int Cmdline_img2dds = 0;
 int Cmdline_NoFPSCap = 0; // Disable FPS capping - kazan
 int Cmdline_no_vsync = 0;
 
@@ -1254,11 +1251,10 @@ bool SetCmdlineParams()
 
 	if ( normal_arg.found() ) {
 		Cmdline_normal = 0;
+	}
 
-		// height maps are only used if normal maps are
-		if ( height_arg.found() ) {
-			Cmdline_height = 1;
-		}
+	if ( height_arg.found() ) {
+		Cmdline_height = 0;
 	}
 
 	if ( noglsl_arg.found() ) {
@@ -1282,9 +1278,6 @@ bool SetCmdlineParams()
 	if (no_di_mouse_arg.found() ) {
 		Cmdline_no_di_mouse = 1;
 	}
-
-	if ( img2dds_arg.found() )
-		Cmdline_img2dds = 1;
 
 	if ( glow_arg.found() )
 		Cmdline_glow = 0;
@@ -1416,11 +1409,7 @@ bool SetCmdlineParams()
 	if ( ogl_spec_arg.found() ) {
 		Cmdline_ogl_spec = ogl_spec_arg.get_float();
 
-		if ( Cmdline_ogl_spec < 0.0f )
-			Cmdline_ogl_spec = 0.0f;
-
-		if ( Cmdline_ogl_spec > 128.0f )
-			Cmdline_ogl_spec = 128.0f;
+		CLAMP(Cmdline_ogl_spec, 0.0f, 128.0f);
 	}
 
 	if ( rearm_timer_arg.found() )

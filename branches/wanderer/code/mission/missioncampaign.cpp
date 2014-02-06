@@ -53,7 +53,7 @@
 #define CAMPAIGN_INITIAL_RELEASE_FILE_VERSION				6
 
 // campaign wasn't ended
-int Campaign_ended_in_mission = 0;
+int Campaign_ending_via_supernova = 0;
 
 // stuff for selecting campaigns.  We need to keep both arrays around since we display the
 // list of campaigns by name, but must load campaigns by filename
@@ -64,7 +64,7 @@ int	Num_campaigns;
 int Campaign_file_missing;
 int Campaign_names_inited = 0;
 
-char Default_campaign_file_name[MAX_FILENAME_LEN - 4]  = { NULL };
+char Default_campaign_file_name[MAX_FILENAME_LEN - 4]  = { 0 };
 
 // stuff used for campaign list building
 static bool MC_desc = false;
