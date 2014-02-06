@@ -2932,7 +2932,7 @@ int parse_object(mission *pm, int flag, p_object *p_objp)
 	p_objp->max_shield_recharge_percent = Ship_info[p_objp->ship_class].max_shield_recharge;
 
 	if (Ship_info[p_objp->ship_class].max_shield_strength > 0.0f) {
-		float shield_mult = p_objp->ship_max_shield_strength / Ship_info[p_objp->ship_class].max_shield_strength;
+		float shield_mult = p_objp->ship_max_shield_strength_multiplier / Ship_info[p_objp->ship_class].max_shield_strength;
 		for (i = 0; i < MAX_SHIELD_SECTIONS; i++)
 			p_objp->max_shield_segment_strength[i] = Ship_info[p_objp->ship_class].max_shield_segment_strength[i] * shield_mult;
 	}
@@ -3569,7 +3569,7 @@ void swap_parse_object(p_object *p_obj, int new_ship_class)
 	// First find out what is the correct number for a ship of this class
 	int num_pbanks = new_ship_info->num_primary_banks;
 	// Now cycle through the primary banks looking for banks that were added or removed
-	for (i=0; i < MAX_SHIP_PRIMARY_BANKS; i++)
+	for (int i=0; i < MAX_SHIP_PRIMARY_BANKS; i++)
 	{
 		// If we're dealing with a primary bank that actually should exist on this ship
 		if ( i < num_pbanks )
