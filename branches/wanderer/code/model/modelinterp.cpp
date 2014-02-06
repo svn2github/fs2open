@@ -2246,7 +2246,20 @@ void model_render_thrusters(polymodel *pm, int objnum, ship *shipp, matrix *orie
 
 			if (shipp) {
 				// if ship is warping out, check position of the engine glow to the warp plane
-				if ( (shipp->flags & (SF_ARRIVING|SF_DEPART_WARP) ) && (shipp->warpout_effect) ) {
+				if ( (shipp->flags & (SF_ARRIVING) ) && (shipp->warpin_effect) && Ship_info[shipp->ship_info_index].warpin_type != WT_HYPERSPACE) {
+					vec3d warp_pnt, tmp;
+					matrix warp_orient;
+
+					shipp->warpin_effect->getWarpPosition(&warp_pnt);
+					shipp->warpin_effect->getWarpOrientation(&warp_orient);
+					vm_vec_sub( &tmp, &world_pnt, &warp_pnt );
+
+					if ( vm_vec_dot( &tmp, &warp_orient.vec.fvec ) < 0.0f ) {
+						break;
+					}
+				}
+
+				if ( (shipp->flags & (SF_DEPART_WARP) ) && (shipp->warpout_effect) && Ship_info[shipp->ship_info_index].warpout_type != WT_HYPERSPACE) {
 					vec3d warp_pnt, tmp;
 					matrix warp_orient;
 
@@ -2254,12 +2267,8 @@ void model_render_thrusters(polymodel *pm, int objnum, ship *shipp, matrix *orie
 					shipp->warpout_effect->getWarpOrientation(&warp_orient);
 					vm_vec_sub( &tmp, &world_pnt, &warp_pnt );
 
-					if ( vm_vec_dot( &tmp, &warp_orient.vec.fvec ) < 0.0f ) {
-						if (shipp->flags & SF_ARRIVING)// if in front of warp plane, don't create.
-							break;
-					} else {
-						if (shipp->flags & SF_DEPART_WARP)
-							break;
+					if ( vm_vec_dot( &tmp, &warp_orient.vec.fvec ) > 0.0f ) {
+						break;
 					}
 				}
 			}
@@ -2398,9 +2407,11 @@ void model_render_thrusters(polymodel *pm, int objnum, ship *shipp, matrix *orie
 						else {
 							dist_bitmap = Interp_secondary_thrust_glow_bitmap;
 						}
+						float mag = vm_vec_mag(&gpt->pnt); 
+						mag -= (float)((int)mag);//Valathil - Get a fairly random but constant number to offset the distortion texture
 						distortion_add_beam(dist_bitmap,
 							TMAP_FLAG_GOURAUD | TMAP_FLAG_RGB | TMAP_FLAG_TEXTURED | TMAP_FLAG_CORRECT | TMAP_HTL_3D_UNLIT | TMAP_FLAG_DISTORTION_THRUSTER | TMAP_FLAG_SOFT_QUAD,
-							&pnt, &norm2, wVal*Interp_distortion_thrust_rad_factor*0.5f, 1.0f
+							&pnt, &norm2, wVal*Interp_distortion_thrust_rad_factor*0.5f, 1.0f, mag
 						);
 					}
 				}
@@ -4233,22 +4244,21 @@ void interp_configure_vertex_buffers(polymodel *pm, int mn)
 		if ( !polygon_list[i].n_verts )
 			continue;
 
-		buffer_data new_buffer;
+		buffer_data new_buffer(polygon_list[i].n_verts);
 
-		new_buffer.index = new(std::nothrow) uint[polygon_list[i].n_verts];
-		Verify( new_buffer.index != NULL );
+		Verify( new_buffer.get_index() != NULL );
 
 		for (j = 0; j < polygon_list[i].n_verts; j++) {
 			if (ibuffer_info.read != NULL) {
 				first_index = cfread_int(ibuffer_info.read);
 				Assert( first_index >= 0 );
 
-				new_buffer.index[j] = (uint)first_index;
+				new_buffer.assign(j, first_index);
 			} else {
 				first_index = model_list->find_index(&polygon_list[i], j);
 				Assert(first_index != -1);
 
-				new_buffer.index[j] = (uint)first_index;
+				new_buffer.assign(j, first_index);
 
 				if (ibuffer_info.write != NULL) {
 					cfwrite_int(first_index, ibuffer_info.write);
@@ -4256,7 +4266,6 @@ void interp_configure_vertex_buffers(polymodel *pm, int mn)
 			}
 		}
 
-		new_buffer.n_verts = polygon_list[i].n_verts;
 		new_buffer.texture = i;
 
 		new_buffer.flags = 0;

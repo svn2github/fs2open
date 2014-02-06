@@ -1718,17 +1718,17 @@ bool turret_fire_weapon(int weapon_num, ship_subsys *turret, int parent_objnum, 
 				objp=&Objects[weapon_objnum];
 				wp=&Weapons[objp->instance];
 
-				parent_ship->last_fired_turret = turret;
-				turret->last_fired_weapon_info_index = wp->weapon_info_index;
-
-				Script_system.SetHookObjects(3, "Ship", &Objects[parent_objnum], "Weapon", objp, "Target", &Objects[turret->turret_enemy_objnum]);
-				Script_system.RunCondition(CHA_ONTURRETFIRED, 0, NULL, &Objects[parent_objnum]);
-
 				//nprintf(("AI", "Turret_time_enemy_in_range = %7.3f\n", ss->turret_time_enemy_in_range));		
 				if (weapon_objnum != -1) {
+					parent_ship->last_fired_turret = turret;
+					turret->last_fired_weapon_info_index = wp->weapon_info_index;
+
 					wp->target_num = turret->turret_enemy_objnum;
 					// AL 1-6-97: Store pointer to turret subsystem
 					wp->turret_subsys = turret;	
+
+					Script_system.SetHookObjects(3, "Ship", &Objects[parent_objnum], "Weapon", objp, "Target", &Objects[turret->turret_enemy_objnum]);
+					Script_system.RunCondition(CHA_ONTURRETFIRED, 0, NULL, &Objects[parent_objnum]);
 
 					// if the gun is a flak gun
 					if(wip->wi_flags & WIF_FLAK){			
@@ -2291,7 +2291,7 @@ void ai_fire_from_turret(ship *shipp, ship_subsys *ss, int parent_objnum)
 			// if the weapon is a flak gun, add some jitter to its aim so it fires in a "cone" 
 			// to make a cool visual effect and make them less lethal
 			if(wip->wi_flags & WIF_FLAK){
-				flak_jitter_aim(&tv2e, dist_to_enemy, ship_get_subsystem_strength(shipp, SUBSYSTEM_WEAPONS));
+				flak_jitter_aim(&tv2e, dist_to_enemy, ship_get_subsystem_strength(shipp, SUBSYSTEM_WEAPONS), wip);
 			}
 			
 			// Fire if:

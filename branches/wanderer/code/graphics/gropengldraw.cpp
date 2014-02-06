@@ -1336,6 +1336,13 @@ void gr_opengl_render_effect(int nverts, vertex *verts, float *radius_list, uint
 				vglEnableVertexAttribArrayARB(attrib_index);
 
 			}
+			if(flags & TMAP_FLAG_DISTORTION_THRUSTER)
+			{
+				attrib_index = opengl_shader_get_attribute("offset_in");
+				vglVertexAttribPointerARB(attrib_index, 1, GL_FLOAT, GL_FALSE, 0, radius_list);
+
+				vglEnableVertexAttribArrayARB(attrib_index);
+			}
 			GL_state.Texture.SetActiveUnit(1);
 			GL_state.Texture.SetTarget(GL_TEXTURE_2D);
 			GL_state.Texture.Enable(Scene_depth_texture);
@@ -1399,8 +1406,10 @@ void gr_opengl_render_effect(int nverts, vertex *verts, float *radius_list, uint
 	GL_state.Lighting(lighting);
 	gr_zbuffer_set(zbuff);
 
-	GLenum buffers[] = { GL_COLOR_ATTACHMENT0_EXT, GL_COLOR_ATTACHMENT1_EXT };
-	vglDrawBuffers(2, buffers);
+	if( (flags & TMAP_FLAG_DISTORTION) || (flags & TMAP_FLAG_DISTORTION_THRUSTER) ) {
+		GLenum buffers[] = { GL_COLOR_ATTACHMENT0_EXT, GL_COLOR_ATTACHMENT1_EXT };
+		vglDrawBuffers(2, buffers);
+	}
 
 	GL_CHECK_FOR_ERRORS("end of render3d()");
 }

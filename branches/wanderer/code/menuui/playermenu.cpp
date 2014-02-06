@@ -202,6 +202,14 @@ void player_select_cancel_create();
 
 extern int delete_pilot_file(char *pilot_name, int single);
 
+/**
+ * Sets Player values to 0/NULL/whatever appropriate default value
+ */
+void zero_player() {
+	player *tmp_Player = new player();
+	memcpy(Player,tmp_Player,sizeof(player));
+	free (tmp_Player);
+}
 
 // basically, gray out all controls (gray == 1), or ungray the controls (gray == 0)
 void player_select_set_controls(int gray)
@@ -571,7 +579,7 @@ void player_select_button_pressed(int n)
 			if ( !player_select_create_new_pilot() ) {
 				player_select_set_bottom_text(XSTR( "Error creating new pilot file!", 380));
 				Player_select_clone_flag = 0;
-				memset(Player,0,sizeof(player));
+				zero_player();
 				Player = NULL;
 				break;
 			}
@@ -1069,7 +1077,7 @@ void player_select_process_input(int k)
 		// if this is the first guy, we should set the Player struct
 		if (Player == NULL) {
 			Player = &Players[0];
-			memset(Player, 0, sizeof(player));
+			zero_player();
 			Player->flags |= PLAYER_FLAGS_STRUCTURE_IN_USE;
 		}
 
@@ -1086,7 +1094,7 @@ void player_select_process_input(int k)
 		write_pilot_file(Player);
 
 		// unset the player
-		memset(Player, 0, sizeof(player));
+		zero_player();
 		Player = NULL;
 
 		// make this guy the selected pilot and put him first on the list
@@ -1326,7 +1334,7 @@ void player_tips_init()
 		if(Num_player_tips >= MAX_PLAYER_TIPS) {
 			break;
 		}
-		Player_tips[Num_player_tips++] = stuff_and_malloc_string(F_NAME, NULL, 1024);
+		Player_tips[Num_player_tips++] = stuff_and_malloc_string(F_NAME, NULL);
 	}
 
 	// stop externalizing, homey

@@ -27,6 +27,7 @@ extern char *Default_ai_profiles_table;
 extern char *Default_autopilot_table;
 extern char *Default_fonts_table;
 extern char *Default_controlconfig_table;
+extern char *Default_mod_table;
 extern char *Default_post_processing_table;
 extern char* Default_main_vertex_shader;
 extern char* Default_main_fragment_shader;
@@ -55,6 +56,7 @@ def_file Default_files[] =
 	{ "autopilot.tbl",			Default_autopilot_table },
 	{ "fonts.tbl",				Default_fonts_table },
 	{ "controlconfigdefaults.tbl",  Default_controlconfig_table },
+	{ "game_settings.tbl",		Default_mod_table},
 	{ "post_processing.tbl",	Default_post_processing_table},
 	{ "main-f.sdr",				Default_main_fragment_shader},
 	{ "main-v.sdr",				Default_main_vertex_shader},
@@ -97,6 +99,36 @@ char *defaults_get_file(char *filename)
 // This is the default table.
 // Please note that the {\n\}s should be removed from the end of each line
 // if you intend to use this to format your own table.
+
+char *Default_mod_table = "\
+;; Mod.tbl should be used for settings which affect the entire mod and	\n\
+;; only very rarely need to be changed (if ever).						\n\
+																		\n\
+#CAMPAIGN SETTINGS														\n\
+																		\n\
+;; Sets default campaign file the game will look for with new pilots	\n\
+$Default Campaign File Name: FreeSpace2									\n\
+																		\n\
+#HUD SETTINGS															\n\
+																		\n\
+;; Sets the delay before a directive will appear on the screen (ms)		\n\
+$directive wait time: 3000												\n\
+																		\n\
+#SEXP SETTINGS															\n\
+																		\n\
+;; When set this makes the argument SEXPs loop through all the SEXPs	\n\
+;; before it moves on to the next argument. Default behaviour is the 	\n\
+;; exact opposite, each SEXP is called for all arguments.				\n\
+$Loop SEXPs Then Arguments:	NO											\n\
+																		\n\
+#OTHER SETTINGS															\n\
+																		\n\
+;; The percentage chance that a pilot will brag about his kills			\n\
+$Self Praise Percentage: 10												\n\
+																		\n\
+#END																	\n\
+";
+
 
 char *Default_species_table = "\
 																		\n\
@@ -2166,9 +2198,16 @@ char* Default_fxaa_prepass_shader =
 char* Default_particle_vertex_shader = 
 "attribute float radius_in;\n"
 "varying float radius;\n"
+"#ifdef FLAG_DISTORTION\n"
+"attribute float offset_in;\n"
+"varying float offset_out;\n"
+"#endif\n"
 "void main()\n"
 "{\n"
 "	radius = radius_in;\n"
+"	#ifdef FLAG_DISTORTION\n"
+"	offset_out = offset_in;\n"
+"	#endif\n"
 "	gl_TexCoord[0] = gl_MultiTexCoord0;\n"
 "	gl_Position = ftransform();\n"
 "	gl_FrontColor = gl_Color;\n"
@@ -2190,6 +2229,7 @@ char* Default_particle_fragment_shader =
 "#ifdef FLAG_DISTORTION\n"
 "uniform sampler2D distMap;\n"
 "uniform sampler2D frameBuffer;\n"
+"varying float offset_out;\n"
 "#endif\n"
 "void main()\n"
 "{\n"
@@ -2215,7 +2255,7 @@ char* Default_particle_fragment_shader =
 " #else\n"
 "	vec2 depthCoord = vec2(gl_FragCoord.x / window_width, gl_FragCoord.y / window_height);\n"
 "	vec4 fragmentColor = texture2D(baseMap, gl_TexCoord[0].xy)*gl_Color.a;\n"
-"	vec2 distortion = texture2D(distMap, gl_TexCoord[0].xy).rg;\n"
+"	vec2 distortion = texture2D(distMap, gl_TexCoord[0].xy+vec2(0.0, offset_out)).rg;\n"
 "	float alpha = clamp(dot(fragmentColor.rgb,vec3(0.3333))*10.0,0.0,1.0);\n"
 "	distortion = ((distortion - 0.5) * 0.01) * alpha;\n"
 "	gl_FragColor = texture2D(frameBuffer,depthCoord+distortion);\n"

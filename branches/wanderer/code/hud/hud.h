@@ -13,6 +13,7 @@
 #include "hud/hudgauges.h"
 #include "graphics/2d.h"
 #include "hud/hudparse.h"
+#include "globalincs/vmallocator.h"
 
 struct object;
 struct cockpit_display;
@@ -214,7 +215,8 @@ protected:
 
 	int font_num;
 
-	bool config_override;
+	bool lock_color;
+	bool sexp_lock_color;
 	bool reticle_follow;
 	bool active;
 	bool off_by_default;
@@ -234,8 +236,9 @@ protected:
 	int custom_frame_offset;
 	int textoffset_x, textoffset_y;
 	char custom_name[NAME_LENGTH];
-	char custom_text[NAME_LENGTH];
-	char default_text[NAME_LENGTH];
+	SCP_string custom_text;
+	
+	SCP_string default_text;
 
 	// Render to texture stuff
 	char texture_target_fname[MAX_FILENAME_LEN];
@@ -246,7 +249,7 @@ protected:
 public:
 	// constructors
 	HudGauge();
-	HudGauge(int _gauge_object, int _gauge_config, bool _allow_override, bool _slew, bool _message, int _disabled_views, int r, int g, int b);
+	HudGauge(int _gauge_object, int _gauge_config, bool _slew, bool _message, int _disabled_views, int r, int g, int b);
 	// constructor for custom gauges
 	HudGauge(int _gauge_config, bool _slew, int r, int g, int b, char* _custom_name, char* _custom_text, char* frame_fname, int txtoffset_x, int txtoffset_y);
 
@@ -262,8 +265,9 @@ public:
 	bool isOffbyDefault();
 	bool isActive();
 	
-	bool configOverride();
-	void updateColor(int r, int g, int b, int a);
+	void updateColor(int r, int g, int b, int a = 255);
+	void lockConfigColor(bool lock);
+	void sexpLockConfigColor(bool lock);
 	void updateActive(bool show);
 	void updatePopUp(bool pop_up_flag);
 	void updateSexpOverride(bool sexp);
@@ -280,8 +284,9 @@ public:
 	char* getCustomGaugeName();
 	void updateCustomGaugeCoords(int _x, int _y);
 	void updateCustomGaugeFrame(int frame_offset);
-	void updateCustomGaugeText(char* txt);
-	char* getCustomGaugeText();
+	void updateCustomGaugeText(const char* txt);
+	void updateCustomGaugeText(SCP_string& txt);
+	const char* getCustomGaugeText();
 
 	void startPopUp(int time=4000);
 	int popUpActive();
@@ -291,6 +296,7 @@ public:
 	virtual bool canRender();
 	virtual void pageIn();
 	virtual void initialize();
+	virtual void onFrame(float frametime);
 
 	bool setupRenderCanvas(int render_target = -1);
 	void setCockpitTarget(cockpit_display *display);

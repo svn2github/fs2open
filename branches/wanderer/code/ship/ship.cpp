@@ -247,7 +247,9 @@ flag_def_list Subsystem_flags[] = {
 	{ "no aggregate",			MSS_FLAG_NO_AGGREGATE,		0 },
 	{ "wait for animation",     MSS_FLAG_TURRET_ANIM_WAIT,  0 },
 	{ "play fire sound for player", MSS_FLAG2_PLAYER_TURRET_SOUND, 1},
-	{ "only target if can fire",    MSS_FLAG2_TURRET_ONLY_TARGET_IF_CAN_FIRE, 1}
+	{ "only target if can fire",    MSS_FLAG2_TURRET_ONLY_TARGET_IF_CAN_FIRE, 1},
+	{ "no disappear",			MSS_FLAG2_NO_DISAPPEAR, 1},
+	{ "collide submodel",		MSS_FLAG2_COLLIDE_SUBMODEL, 1}
 };
 
 const int Num_subsystem_flags = sizeof(Subsystem_flags)/sizeof(flag_def_list);
@@ -1151,7 +1153,7 @@ int parse_ship_template()
 	return rtn;
 }
 
-void parse_ship_sound(char *name, int id, ship_info *sip)
+void parse_ship_sound(char *name, GameSoundsIndex id, ship_info *sip)
 {
 	Assert( name != NULL );
 
@@ -1160,7 +1162,7 @@ void parse_ship_sound(char *name, int id, ship_info *sip)
 	parse_sound(name, &temp_index, sip->name);
 
 	if (temp_index >= 0)
-		sip->ship_sounds.insert(std::pair<int, int>(id, temp_index));
+		sip->ship_sounds.insert(std::pair<GameSoundsIndex, int>(id, temp_index));
 }
 
 void parse_ship_sounds(ship_info *sip)
@@ -1187,6 +1189,9 @@ void parse_ship_sounds(ship_info *sip)
 	parse_ship_sound("$AspectSeekerProximityWarningSnd:", SND_PROXIMITY_ASPECT_WARNING, sip);
 	parse_ship_sound("$MissileEvadedSnd:",                SND_MISSILE_EVADED_POPUP, sip);
 	parse_ship_sound("$CargoScanningSnd:",                SND_CARGO_SCAN, sip);
+
+	// Use SND_SHIP_EXPLODE_1 for custom explosion sounds
+	parse_ship_sound("$ExplosionSnd:",                    SND_SHIP_EXPLODE_1, sip);
 } 
 
 void parse_ship_particle_effect(ship_info* sip, particle_effect* pe, char *id_string)
@@ -1302,11 +1307,13 @@ void parse_weapon_bank(ship_info *sip, bool is_primary, int *num_banks, int *ban
 	Assert(bank_default_weapons != NULL);
 	Assert(bank_capacities != NULL);
 	const int max_banks = is_primary ? MAX_SHIP_PRIMARY_BANKS : MAX_SHIP_SECONDARY_BANKS;
+	const char *default_banks_str = is_primary ? "$Default PBanks:" : "$Default SBanks:";
+	const char *bank_capacities_str = is_primary ? "$PBank Capacity:" : "$SBank Capacity:";
 
 	// we initialize to the previous parse, which presumably worked
 	int num_bank_capacities = num_banks != NULL ? *num_banks : 0;
 
-	if (optional_string(const_cast<char*>(is_primary ? "$Default PBanks:" : "$Default SBanks:")))
+	if (optional_string(default_banks_str))
 	{
 		// get weapon list
 		if (num_banks != NULL)
@@ -1315,7 +1322,7 @@ void parse_weapon_bank(ship_info *sip, bool is_primary, int *num_banks, int *ban
 			stuff_int_list(bank_default_weapons, max_banks, WEAPON_LIST_TYPE);
 	}
 
-	if (optional_string(const_cast<char*>(is_primary ? "$PBank Capacity:" : "$SBank Capacity:")))
+	if (optional_string(bank_capacities_str))
 	{
 		// get capacity list
 		num_bank_capacities = stuff_int_list(bank_capacities, max_banks, RAW_INTEGER_TYPE);
@@ -1417,7 +1424,7 @@ int parse_ship_values(ship_info* sip, bool isTemplate, bool first_time, bool rep
 	}
 
 	if (optional_string("+Description:")) {
-		stuff_malloc_string(&sip->desc, F_MULTITEXT, NULL, SHIP_MULTITEXT_LENGTH);
+		stuff_malloc_string(&sip->desc, F_MULTITEXT, NULL);
 	}
 	
 	if (optional_string("+Tech Title:")) {
@@ -1425,7 +1432,7 @@ int parse_ship_values(ship_info* sip, bool isTemplate, bool first_time, bool rep
 	}
 
 	if (optional_string("+Tech Description:")) {
-		stuff_malloc_string(&sip->tech_desc, F_MULTITEXT, NULL, SHIP_MULTITEXT_LENGTH);
+		stuff_malloc_string(&sip->tech_desc, F_MULTITEXT, NULL);
 	}
 
 	if (optional_string("+Length:")) {
@@ -1474,7 +1481,7 @@ int parse_ship_values(ship_info* sip, bool isTemplate, bool first_time, bool rep
 	}
 	if(optional_string( "+Cockpit offset:" ))
 	{
-		stuff_vector(&sip->cockpit_offset);
+		stuff_vec3d(&sip->cockpit_offset);
 	}
 	while(optional_string( "$Cockpit Display:" )) 
 	{
@@ -1845,7 +1852,7 @@ int parse_ship_values(ship_info* sip, bool isTemplate, bool first_time, bool rep
 
 	if(optional_string("$Max Velocity:"))
 	{
-		stuff_vector(&sip->max_vel);
+		stuff_vec3d(&sip->max_vel);
 		sip->max_accel = sip->max_vel.xyz.z;
 	}
 
@@ -1854,7 +1861,7 @@ int parse_ship_values(ship_info* sip, bool isTemplate, bool first_time, bool rep
 
 	if(optional_string("$Rotation Time:"))
 	{
-		stuff_vector(&sip->rotation_time);
+		stuff_vec3d(&sip->rotation_time);
 
 		// div/0 safety check.
 		if ((sip->rotation_time.xyz.x == 0) || (sip->rotation_time.xyz.y == 0) || (sip->rotation_time.xyz.z == 0))
@@ -1940,7 +1947,7 @@ int parse_ship_values(ship_info* sip, bool isTemplate, bool first_time, bool rep
 				stuff_float(&sip->convergence_distance);
 		}
 		if(optional_string("+Offset:")) {
-			stuff_vector(&sip->convergence_offset);
+			stuff_vec3d(&sip->convergence_offset);
 
 			if (IS_VEC_NULL(&sip->convergence_offset))
 				sip->aiming_flags &= ~AIM_FLAG_CONVERGENCE_OFFSET;
@@ -2671,7 +2678,7 @@ int parse_ship_values(ship_info* sip, bool isTemplate, bool first_time, bool rep
 		sip->flags |= SIF_AFTERBURNER;
 
 		if(optional_string("+Aburn Max Vel:")) {
-			stuff_vector(&sip->afterburner_max_vel);
+			stuff_vec3d(&sip->afterburner_max_vel);
 		}
 
 		if(optional_string("+Aburn For accel:")) {
@@ -2768,7 +2775,7 @@ int parse_ship_values(ship_info* sip, bool isTemplate, bool first_time, bool rep
 	
 	if(optional_string("$Closeup_pos:"))
 	{
-		stuff_vector(&sip->closeup_pos);
+		stuff_vec3d(&sip->closeup_pos);
 	}
 	else if (first_time && strlen(sip->pof_file))
 	{
@@ -2795,7 +2802,7 @@ int parse_ship_values(ship_info* sip, bool isTemplate, bool first_time, bool rep
 		
 	if(optional_string("$Topdown offset:")) {
 		sip->topdown_offset_def = true;
-		stuff_vector(&sip->topdown_offset);
+		stuff_vec3d(&sip->topdown_offset);
 	}
 
 	if (optional_string("$Shield_icon:")) {
@@ -3012,7 +3019,7 @@ int parse_ship_values(ship_info* sip, bool isTemplate, bool first_time, bool rep
 		trail_info *ci = &sip->ct_info[sip->ct_count++];
 		
 		required_string("+Offset:");
-		stuff_vector(&ci->pt);
+		stuff_vec3d(&ci->pt);
 		
 		required_string("+Start Width:");
 		stuff_float(&ci->w_start);
@@ -3207,7 +3214,7 @@ int parse_ship_values(ship_info* sip, bool isTemplate, bool first_time, bool rep
 		//Get +departure rvec and store on the path_metadata object
 		if (optional_string("+departure rvec:"))
 		{
-			stuff_vector(&metadata.departure_rvec);
+			stuff_vec3d(&metadata.departure_rvec);
 		}
 
 		//Add the new path_metadata to sip->pathMetadata keyed by path name
@@ -3614,7 +3621,7 @@ int parse_ship_values(ship_info* sip, bool isTemplate, bool first_time, bool rep
 
 						if(optional_string("+absolute_angle:")){
 							current_trigger->absolute = true;
-							stuff_vector(&current_trigger->angle );
+							stuff_vec3d(&current_trigger->angle );
 		
 							current_trigger->angle.xyz.x = fl_radians(current_trigger->angle.xyz.x);
 							current_trigger->angle.xyz.y = fl_radians(current_trigger->angle.xyz.y);
@@ -3624,7 +3631,7 @@ int parse_ship_values(ship_info* sip, bool isTemplate, bool first_time, bool rep
 							if(!optional_string("+relative_angle:"))
 								required_string("+relative_angle:");
 
-							stuff_vector(&current_trigger->angle );
+							stuff_vec3d(&current_trigger->angle );
 		
 							current_trigger->angle.xyz.x = fl_radians(current_trigger->angle.xyz.x);
 							current_trigger->angle.xyz.y = fl_radians(current_trigger->angle.xyz.y);
@@ -3632,14 +3639,14 @@ int parse_ship_values(ship_info* sip, bool isTemplate, bool first_time, bool rep
 						}
 		
 						if(optional_string("+velocity:")){
-							stuff_vector(&current_trigger->vel );
+							stuff_vec3d(&current_trigger->vel );
 							current_trigger->vel.xyz.x = fl_radians(current_trigger->vel.xyz.x);
 							current_trigger->vel.xyz.y = fl_radians(current_trigger->vel.xyz.y);
 							current_trigger->vel.xyz.z = fl_radians(current_trigger->vel.xyz.z);
 						}
 		
 						if(optional_string("+acceleration:")){
-							stuff_vector(&current_trigger->accel );
+							stuff_vec3d(&current_trigger->accel );
 							current_trigger->accel.xyz.x = fl_radians(current_trigger->accel.xyz.x);
 							current_trigger->accel.xyz.y = fl_radians(current_trigger->accel.xyz.y);
 							current_trigger->accel.xyz.z = fl_radians(current_trigger->accel.xyz.z);
@@ -3661,7 +3668,7 @@ int parse_ship_values(ship_info* sip, bool isTemplate, bool first_time, bool rep
 		
 						if(optional_string("+absolute_angle:")){
 							current_trigger->absolute = true;
-							stuff_vector(&current_trigger->angle );
+							stuff_vec3d(&current_trigger->angle );
 		
 							current_trigger->angle.xyz.x = fl_radians(current_trigger->angle.xyz.x);
 							current_trigger->angle.xyz.y = fl_radians(current_trigger->angle.xyz.y);
@@ -3669,7 +3676,7 @@ int parse_ship_values(ship_info* sip, bool isTemplate, bool first_time, bool rep
 						}else{
 							current_trigger->absolute = false;
 							required_string("+relative_angle:");
-							stuff_vector(&current_trigger->angle );
+							stuff_vec3d(&current_trigger->angle );
 		
 							current_trigger->angle.xyz.x = fl_radians(current_trigger->angle.xyz.x);
 							current_trigger->angle.xyz.y = fl_radians(current_trigger->angle.xyz.y);
@@ -3677,13 +3684,13 @@ int parse_ship_values(ship_info* sip, bool isTemplate, bool first_time, bool rep
 						}
 		
 						required_string("+velocity:");
-						stuff_vector(&current_trigger->vel );
+						stuff_vec3d(&current_trigger->vel );
 						current_trigger->vel.xyz.x = fl_radians(current_trigger->vel.xyz.x);
 						current_trigger->vel.xyz.y = fl_radians(current_trigger->vel.xyz.y);
 						current_trigger->vel.xyz.z = fl_radians(current_trigger->vel.xyz.z);
 		
 						required_string("+acceleration:");
-						stuff_vector(&current_trigger->accel );
+						stuff_vec3d(&current_trigger->accel );
 						current_trigger->accel.xyz.x = fl_radians(current_trigger->accel.xyz.x);
 						current_trigger->accel.xyz.y = fl_radians(current_trigger->accel.xyz.y);
 						current_trigger->accel.xyz.z = fl_radians(current_trigger->accel.xyz.z);
@@ -5039,6 +5046,10 @@ void ship_set(int ship_index, int objnum, int ship_type)
 	// corkscrew missile stuff
 	shipp->next_corkscrew_fire = 1;
 
+	// Missile bank indexes to avoid firing different swarm/corkscrew missiles
+	shipp->swarm_missile_bank = -1;
+	shipp->corkscrew_missile_bank = -1;
+
 	// field for score
 	shipp->score = sip->score;
 
@@ -5322,6 +5333,8 @@ int subsys_set(int objnum, int ignore_subsys_info)
 
 		ship_system->system_info = model_system;				// set the system_info pointer to point to the data read in from the model
 
+		ship_system->parent_objnum = objnum;
+
 		// if the table has set an name copy it
 		if (ship_system->system_info->alt_sub_name[0] != '\0') {
 			strcpy_s(ship_system->sub_name, ship_system->system_info->alt_sub_name);
@@ -5370,6 +5383,8 @@ int subsys_set(int objnum, int ignore_subsys_info)
 			ship_system->flags |= SSF_ROTATES;
 		if (model_system->flags2 & MSS_FLAG2_PLAYER_TURRET_SOUND)
 			ship_system->flags |= SSF_PLAY_SOUND_FOR_PLAYER;
+		if (model_system->flags2 & MSS_FLAG2_NO_DISAPPEAR)
+			ship_system->flags |= SSF_NO_DISAPPEAR;
 
 		ship_system->turn_rate = model_system->turn_rate;
 
@@ -7256,13 +7271,21 @@ void ship_dying_frame(object *objp, int ship_num)
 			
 			// play ship explosion sound effect, pick appropriate explosion sound
 			int sound_index;
-			if ( sip->flags & (SIF_CAPITAL | SIF_KNOSSOS_DEVICE) ) {
-				sound_index=SND_CAPSHIP_EXPLODE;
-			} else {
-				if ( OBJ_INDEX(objp) & 1 ) {
-					sound_index=SND_SHIP_EXPLODE_1;
+
+			if (ship_has_sound(objp, SND_SHIP_EXPLODE_1))
+			{
+				sound_index = ship_get_sound(objp, SND_SHIP_EXPLODE_1);
+			}
+			else
+			{
+				if ( sip->flags & (SIF_CAPITAL | SIF_KNOSSOS_DEVICE) ) {
+					sound_index=SND_CAPSHIP_EXPLODE;
 				} else {
-					sound_index=SND_SHIP_EXPLODE_2;
+					 if ( OBJ_INDEX(objp) & 1 ) {
+						sound_index=SND_SHIP_EXPLODE_1;
+					} else {
+						sound_index=SND_SHIP_EXPLODE_2;
+					}
 				}
 			}
 
@@ -8055,6 +8078,43 @@ void ship_process_pre(object *objp, float frametime)
 
 MONITOR( NumShips )
 
+void ship_radar_process( object * obj, ship * shipp, ship_info * sip ) 
+{
+	Assert( obj != NULL);
+	Assert( shipp != NULL );
+	Assert( sip != NULL);
+
+	shipp->radar_last_status = shipp->radar_current_status;
+
+	RadarVisibility visibility = radar_is_visible(obj);
+
+	if (visibility == NOT_VISIBLE)
+	{
+		if (shipp->radar_last_contact < 0 && shipp->radar_visible_since < 0)
+		{
+			shipp->radar_visible_since = -1;
+			shipp->radar_last_contact = -1;
+		}
+		else
+		{
+			shipp->radar_visible_since = -1;
+			shipp->radar_last_contact = Missiontime;
+		}
+	}
+	else if (visibility == VISIBLE || visibility == DISTORTED)
+	{
+		if (shipp->radar_visible_since < 0)
+		{
+			shipp->radar_visible_since = Missiontime;
+		}
+
+		shipp->radar_last_contact = Missiontime;
+	}
+
+	shipp->radar_current_status = visibility;
+}
+
+
 /**
  * Player ship uses this code, but does a quick out after doing a few things.
  * 
@@ -8197,6 +8257,9 @@ void ship_process_post(object * obj, float frametime)
 		// fast enough to move 2x its radius in SHIP_WARP_TIME seconds.
 		shipfx_warpout_frame( obj, frametime );
 	} 
+
+	// update radar status of the ship
+	ship_radar_process(obj, shipp, sip);
 
 	if ( (!(shipp->flags & SF_ARRIVING) || (Ai_info[shipp->ai_index].mode == AIM_BAY_EMERGE)
 		|| ((sip->warpin_type == WT_IN_PLACE_ANIM) && (shipp->flags & SF_ARRIVING_STAGE_2)) )
@@ -8759,6 +8822,11 @@ int ship_create(matrix *orient, vec3d *pos, int ship_type, char *ship_name)
 	model_anim_set_initial_states(shipp);
 
 	shipp->model_instance_num = model_create_instance(sip->model_num);
+
+	shipp->time_created = Missiontime;
+
+	shipp->radar_visible_since = -1;
+	shipp->radar_last_contact = -1;
 	
 	return objnum;
 }
@@ -10179,7 +10247,7 @@ int ship_fire_primary(object * obj, int stream_weapons, int force)
 								}
 								else
 								{
-									flak_set_range(&Objects[weapon_objnum], flak_range-20);
+									flak_set_range(&Objects[weapon_objnum], flak_range - winfo_p->untargeted_flak_range_penalty);
 								}
 
 								if ((winfo_p->muzzle_flash>=0) && (((shipp==Player_ship) && (vm_vec_mag(&Player_obj->phys_info.vel)>=45)) || (shipp!=Player_ship)))
@@ -10605,8 +10673,16 @@ int ship_fire_secondary( object *obj, int allow_swarm )
 
 	num_fired = 0;		// tracks how many missiles actually fired
 
-	bank = swp->current_secondary_bank;
-	if ( bank < 0 ) {
+	// niffiwan: allow swarm/corkscrew bank to keep firing if current bank changes
+	if (shipp->swarm_missile_bank != -1 && allow_swarm) {
+		bank = shipp->swarm_missile_bank;
+	} else if (shipp->corkscrew_missile_bank != -1 && allow_swarm) {
+		bank = shipp->corkscrew_missile_bank;
+	} else {
+		bank = swp->current_secondary_bank;
+	}
+
+	if ( bank < 0 || bank > sip->num_secondary_banks ) {
 		return 0;
 	}
 
@@ -10649,7 +10725,8 @@ int ship_fire_secondary( object *obj, int allow_swarm )
 		return 0;
 	}
 
-	if ( swp->current_secondary_bank < 0 ){
+	// niffiwan: 04/03/12: duplicate of a check approx 100 lines above - not needed?
+	if ( bank < 0 ){
 		return 0;
 	}
 
@@ -10727,10 +10804,11 @@ int ship_fire_secondary( object *obj, int allow_swarm )
 	if ( (wip->wi_flags & WIF_SWARM) && !allow_swarm ) {
 		Assert(wip->swarm_count > 0);
 		if(wip->swarm_count <= 0){
-			shipp->num_swarm_missiles_to_fire += SWARM_DEFAULT_NUM_MISSILES_FIRED;
+			shipp->num_swarm_missiles_to_fire = SWARM_DEFAULT_NUM_MISSILES_FIRED;
 		} else {
-			shipp->num_swarm_missiles_to_fire += wip->swarm_count;
+			shipp->num_swarm_missiles_to_fire = wip->swarm_count;
 		}
+		shipp->swarm_missile_bank = bank;
 		return 1;		//	Note: Missiles didn't get fired, but the frame interval code will fire them.
 	}
 
@@ -10738,7 +10816,8 @@ int ship_fire_secondary( object *obj, int allow_swarm )
 	if ( (wip->wi_flags & WIF_CORKSCREW) && !allow_swarm ) {
 		//phreak 11-9-02 
 		//changed this from 4 to custom number defined in tables
-		shipp->num_corkscrew_to_fire = (ubyte)(shipp->num_corkscrew_to_fire + (ubyte)wip->cs_num_fired);		
+		shipp->num_corkscrew_to_fire = (ubyte)(shipp->num_corkscrew_to_fire + (ubyte)wip->cs_num_fired);
+		shipp->corkscrew_missile_bank = bank;
 		return 1;		//	Note: Missiles didn't get fired, but the frame interval code will fire them.
 	}	
 
@@ -10900,8 +10979,8 @@ int ship_fire_secondary( object *obj, int allow_swarm )
 		if ( Weapon_info[weapon].launch_snd != -1 ) {
 			snd_play( &Snds[Weapon_info[weapon].launch_snd], 0.0f, 1.0f, SND_PRIORITY_MUST_PLAY );
 			swp = &Player_ship->weapons;
-			if (swp->current_secondary_bank >= 0) {
-				wip = &Weapon_info[swp->secondary_bank_weapons[swp->current_secondary_bank]];
+			if (bank >= 0) {
+				wip = &Weapon_info[swp->secondary_bank_weapons[bank]];
 				if (Player_ship->flags & SF_SECONDARY_DUAL_FIRE){
 					joy_ff_play_secondary_shoot((int) (wip->cargo_size * 2.0f));
 				} else {
@@ -10958,10 +11037,12 @@ done_secondary:
 
 		if (shipp->num_swarm_missiles_to_fire > 1) {
 			shipp->num_swarm_missiles_to_fire = 1;
+			shipp->swarm_missile_bank = -1;
 		}
 
 		if (shipp->num_corkscrew_to_fire > 1) {
 			shipp->num_corkscrew_to_fire = 1;
+			shipp->corkscrew_missile_bank = -1;
 		}
 	}
 
@@ -10979,8 +11060,8 @@ done_secondary:
 	//then it would have no firedelay. and then add 250 ms of delay. in effect, this way there is no penalty if there is any firedelay remaning in
 	//the next valid bank. the delay is there to prevent things like Trible/Quad Fire Trebuchets.
 	//
-	// niffiwan: only try to switch banks if object has multiple banks
-	if ( (obj->flags & OF_PLAYER_SHIP) && (swp->secondary_bank_ammo[bank] <= 0) && (swp->num_secondary_banks >= 2) ) {
+	// niffiwan: only try to switch banks if object has multiple banks, and firing bank is the current bank
+	if ( (obj->flags & OF_PLAYER_SHIP) && (swp->secondary_bank_ammo[bank] <= 0) && (swp->num_secondary_banks >= 2) && (bank == swp->current_secondary_bank) ) {
 		// niffiwan: call ship_select_next_secondary instead of ship_select_next_valid_secondary_bank
 		// ensures all "extras" are dealt with, like animations, scripting hooks, etc
 		if (ship_select_next_secondary(obj) ) {			//DTP here we switch to the next valid bank, but we can't call weapon_info on next fire_wait
@@ -14348,7 +14429,7 @@ void ship_maybe_praise_self(ship *deader_sp, ship *killer_sp)
 	int j; 
 	bool wingman = false;
 
-	if ( myrand()&10 ) {
+	if ( (int)(frand()*100) > Praise_self_percentage ) {
 		return;
 	}
 
@@ -15664,6 +15745,9 @@ float ship_get_exp_outer_rad(object *ship_objp)
 
 int valid_cap_subsys_cargo_list(char *subsys)
 {
+	// Return 1 for all subsystems now, due to Mantis #2524.
+	return 1;
+	/*
 	if (stristr(subsys, "nav")
 		|| stristr(subsys, "comm")
 		|| stristr(subsys, "engine")
@@ -15675,6 +15759,7 @@ int valid_cap_subsys_cargo_list(char *subsys)
 	}
 
 	return 0;
+	*/
 }
 
 /**
@@ -17044,7 +17129,7 @@ void init_path_metadata(path_metadata& metadata)
 	vm_vec_zero(&metadata.departure_rvec);
 }
 
-int ship_get_sound(object *objp, int id)
+int ship_get_sound(object *objp, GameSoundsIndex id)
 {
 	Assert( objp != NULL );
 	Assert( id >= 0 && id < (int) Snds.size() );
@@ -17054,10 +17139,29 @@ int ship_get_sound(object *objp, int id)
 	ship *shipp = &Ships[objp->instance];
 	ship_info *sip = &Ship_info[shipp->ship_info_index];
 
-	SCP_map<int, int>::iterator element = sip->ship_sounds.find(id);
+	SCP_map<GameSoundsIndex, int>::iterator element = sip->ship_sounds.find(id);
 
 	if (element == sip->ship_sounds.end())
 		return id;
 	else
 		return (*element).second;
 }
+
+bool ship_has_sound(object *objp, GameSoundsIndex id)
+{
+	Assert( objp != NULL );
+	Assert( id >= 0 && id < (int) Snds.size() );
+
+	Assert( objp->type == OBJ_SHIP );
+
+	ship *shipp = &Ships[objp->instance];
+	ship_info *sip = &Ship_info[shipp->ship_info_index];
+
+	SCP_map<GameSoundsIndex, int>::iterator element = sip->ship_sounds.find(id);
+
+	if (element == sip->ship_sounds.end())
+		return false;
+	else
+		return true;
+}
+

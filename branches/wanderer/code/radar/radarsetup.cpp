@@ -364,12 +364,12 @@ void radar_frame_init()
 }
 
 HudGaugeRadar::HudGaugeRadar():
-HudGauge(HUD_OBJECT_RADAR_STD, HUD_RADAR, true, false, false, (VM_EXTERNAL | VM_DEAD_VIEW | VM_WARP_CHASE | VM_PADLOCK_ANY | VM_OTHER_SHIP), 255, 255, 255)
+HudGauge(HUD_OBJECT_RADAR_STD, HUD_RADAR, false, false, (VM_EXTERNAL | VM_DEAD_VIEW | VM_WARP_CHASE | VM_PADLOCK_ANY | VM_OTHER_SHIP), 255, 255, 255)
 {
 }
 
-HudGaugeRadar::HudGaugeRadar(int _gauge_object, bool n_allow_override, int r, int g, int b):
-HudGauge(_gauge_object, HUD_RADAR, n_allow_override, false, false, (VM_EXTERNAL | VM_DEAD_VIEW | VM_WARP_CHASE | VM_PADLOCK_ANY | VM_OTHER_SHIP), r, g, b)
+HudGaugeRadar::HudGaugeRadar(int _gauge_object, int r, int g, int b):
+HudGauge(_gauge_object, HUD_RADAR, false, false, (VM_EXTERNAL | VM_DEAD_VIEW | VM_WARP_CHASE | VM_PADLOCK_ANY | VM_OTHER_SHIP), r, g, b)
 {
 }
 
@@ -440,6 +440,8 @@ void HudGaugeRadar::initialize()
 	gr_get_string_size( &w, &h, Large_blip_string );
 	Large_blip_offset_x = -w/2;
 	Large_blip_offset_y = -h/2;
+
+	HudGauge::initialize();
 }
 
 void HudGaugeRadar::drawRange()
@@ -468,4 +470,124 @@ void HudGaugeRadar::drawRange()
 		Int3();	// can't happen (get Alan if it does)
 		break;
 	}
+}
+
+/**
+ * @brief Return if the specified object is visible on the radar
+ *
+ * @param objp The object which should be checked
+ * @return A RadarVisibility enum specifying the visibility of the specified object
+ */
+RadarVisibility radar_is_visible( object *objp )
+{
+	Assert( objp != NULL );
+
+	if (objp->flags & OF_SHOULD_BE_DEAD)
+	{
+		return NOT_VISIBLE;
+	}
+
+	vec3d pos, tempv;
+	float awacs_level, dist, max_radar_dist;
+	vec3d world_pos = objp->pos;
+	SCP_list<jump_node>::iterator jnp;
+
+	// get team-wide awacs level for the object if not ship
+	int ship_is_visible = 0;
+	if (objp->type == OBJ_SHIP) {
+		if (Player_ship != NULL) {
+			if (ship_is_visible_by_team(objp, Player_ship)) {
+				ship_is_visible = 1;
+			}
+		}
+	}
+
+	// only check awacs level if ship is not visible by team
+	awacs_level = 1.5f;
+	if (Player_ship != NULL && !ship_is_visible) {
+		awacs_level = awacs_get_level(objp, Player_ship);
+	}
+
+	// if the awacs level is unviewable - bail
+	if(awacs_level < 0.0f && !See_all){
+		return NOT_VISIBLE;
+	}
+
+	// Apply object type filters	
+	switch (objp->type)
+	{
+		case OBJ_SHIP:
+			if (Ships[objp->instance].flags & SIF_STEALTH)
+				return NOT_VISIBLE;
+
+			// Ships that are warp in in are not visible on the radar
+			if (Ships[objp->instance].flags & SF_ARRIVING_STAGE_1)
+				return NOT_VISIBLE;
+
+			break;
+		
+		case OBJ_JUMP_NODE:
+		{
+			for (jnp = Jump_nodes.begin(); jnp != Jump_nodes.end(); ++jnp) {
+				if(jnp->get_obj() == objp)
+					break;
+			}
+			
+			// don't plot hidden jump nodes
+			if ( jnp->is_hidden() )
+				return NOT_VISIBLE;
+
+			// filter jump nodes here if required
+			break;
+		}
+
+		case OBJ_WEAPON:
+		{
+			// if not a bomb, return
+			if ( !(Weapon_info[Weapons[objp->instance].weapon_info_index].wi_flags2 & WIF2_SHOWN_ON_RADAR) )
+				if ( !(Weapon_info[Weapons[objp->instance].weapon_info_index].wi_flags & WIF_BOMB) )
+					return NOT_VISIBLE;
+
+			// if explicitly hidden, return
+			if (Weapon_info[Weapons[objp->instance].weapon_info_index].wi_flags2 & WIF2_DONT_SHOW_ON_RADAR)
+				return NOT_VISIBLE;
+
+			// if we don't attack the bomb, return
+			if ( (!(Weapon_info[Weapons[objp->instance].weapon_info_index].wi_flags2 & WIF2_SHOW_FRIENDLY)) && (!iff_x_attacks_y(Player_ship->team, obj_team(objp))))
+				return NOT_VISIBLE;
+
+			// if a local ssm is in subspace, return
+			if (Weapons[objp->instance].lssm_stage == 3)
+				return NOT_VISIBLE;
+
+			break;
+		}
+
+		// if any other kind of object, don't show it on radar
+		default:
+			return NOT_VISIBLE;
+	}
+	
+	vm_vec_sub(&tempv, &world_pos, &Player_obj->pos);
+	vm_vec_rotate(&pos, &tempv, &Player_obj->orient);
+
+	// Apply range filter
+	dist = vm_vec_dist(&world_pos, &Player_obj->pos);
+	max_radar_dist = Radar_ranges[HUD_config.rp_dist];
+	if (dist > max_radar_dist) {
+		return NOT_VISIBLE;
+	}
+	
+	if (objp->type == OBJ_SHIP)
+	{
+		// ships specifically hidden from sensors
+		if (Ships[objp->instance].flags & SF_HIDDEN_FROM_SENSORS)
+			return DISTORTED;
+
+		// determine if its AWACS distorted
+		if (awacs_level < 1.0f)
+			return DISTORTED;
+	}
+	
+	return VISIBLE;
 }
