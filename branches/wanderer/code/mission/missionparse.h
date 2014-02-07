@@ -437,8 +437,8 @@ typedef struct p_object {
 	int		alt_type_index;					// optional alt type index
 	int		callsign_index;					// optional callsign index
 
-	float ship_max_hull_strength_multiplier;			// Needed to deal with special hitpoints
-	float ship_max_shield_strength_multiplier;			//
+	float ship_max_hull_strength;			// Needed to deal with special hitpoints
+	float ship_max_shield_strength;
 
 	float max_shield_recharge_percent;
 	float max_shield_segment_strength[MAX_SHIELD_SECTIONS];
@@ -535,8 +535,8 @@ typedef struct p_object {
 		alt_type_index = 0;
 		callsign_index = 0;
 
-		ship_max_hull_strength_multiplier = 1.0f;
-		ship_max_shield_strength_multiplier = 1.0f;
+		ship_max_hull_strength = 0.0f;
+		ship_max_shield_strength = 0.0f;
 
 		num_texture_replacements = 0;
 		
@@ -700,7 +700,7 @@ int mission_parse_is_multi(char *filename, char *mission_name );
 int mission_parse_get_multi_mission_info(char *filename);
 
 // called externally from multiplayer code
-int mission_do_departure(object *objp);
+int mission_do_departure(object *objp, bool goal_is_to_warp = false);
 
 // called externally from freespace.cpp
 void mission_parse_fixup_players(void);
@@ -723,15 +723,17 @@ int mission_remove_scheduled_repair( object *objp );
 void mission_parse_support_arrived( int objnum );
 
 // alternate name stuff
-int mission_parse_lookup_alt(char *name);
+int mission_parse_lookup_alt(const char *name);
 void mission_parse_lookup_alt_index(int index, char *out);
-int mission_parse_add_alt(char *name);
+int mission_parse_add_alt(const char *name);
+void mission_parse_remove_alt(const char *name);
 void mission_parse_reset_alt();
 
 // callsign stuff
-int mission_parse_lookup_callsign(char *name);
+int mission_parse_lookup_callsign(const char *name);
 void mission_parse_lookup_callsign_index(int index, char *out);
-int mission_parse_add_callsign(char *name);
+int mission_parse_add_callsign(const char *name);
+void mission_parse_remove_callsign(const char *name);
 void mission_parse_reset_callsign();
 
 // is training mission

@@ -109,6 +109,7 @@ class waypoint_list;
 #define OPF_MISSION_MOOD		82		// Karajorma - Moods determine which builtin messages will be sent
 #define OPF_SHIP_FLAG			83		// Karajorma - The name of a ship flag
 #define OPF_TEAM_COLOR			84		// The E - Color settings as defined in Colors.tbl
+#define OPF_NEBULA_PATTERN		85		// Axem - Full Nebula Background Patterns, as defined in nebula.tbl
 
 // Operand return types
 #define	OPR_NUMBER				1	// returns number
@@ -707,6 +708,7 @@ class waypoint_list;
 #define OP_NAV_UNSELECT						(0x001a | OP_CATEGORY_CHANGE2 | OP_NONCAMPAIGN_FLAG) 	// Talon1024
 #define OP_ALTER_SHIP_FLAG					(0x001b | OP_CATEGORY_CHANGE2 | OP_NONCAMPAIGN_FLAG)	// Karajorma
 #define OP_CHANGE_TEAM_COLOR				(0x001c | OP_CATEGORY_CHANGE2 | OP_NONCAMPAIGN_FLAG)	// The E
+#define OP_NEBULA_CHANGE_PATTERN			(0x001d | OP_CATEGORY_CHANGE2 | OP_NONCAMPAIGN_FLAG)	// Axem
 
 // defined for AI goals
 #define OP_AI_CHASE							(0x0000 | OP_CATEGORY_AI | OP_NONCAMPAIGN_FLAG)
@@ -978,10 +980,21 @@ typedef struct sexp_ai_goal_link {
 	int op_code;
 } sexp_ai_goal_link;
 
+#define SEXP_CONDITIONAL_OPERATOR			(1<<0)
+#define SEXP_ARGUMENT_OPERATOR				(1<<1)
+#define SEXP_ACTION_OPERATOR				(1<<2)
+#define SEXP_ARITHMETIC_OPERATOR			(1<<3)
+#define SEXP_BOOLEAN_OPERATOR				(1<<4)
+#define SEXP_INTEGER_OPERATOR				(1<<5)
+#define SEXP_GOAL_OPERATOR					(1<<6)
+
+#define SEXP_TRIGGER_OPERATOR		( SEXP_ARITHMETIC_OPERATOR | SEXP_BOOLEAN_OPERATOR | SEXP_INTEGER_OPERATOR ) 
+
 typedef struct sexp_oper {
 	char	*text;
 	int	value;
 	int	min, max;
+	int type;
 } sexp_oper;
 
 typedef struct sexp_node {

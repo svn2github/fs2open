@@ -1816,8 +1816,8 @@ int parse_create_object_sub(p_object *p_objp)
 		}
 	}
 
-	shipp->ship_max_shield_strength = sip->max_shield_strength * p_objp->ship_max_shield_strength_multiplier;
-	shipp->ship_max_hull_strength =  sip->max_hull_strength * p_objp->ship_max_hull_strength_multiplier;
+	shipp->ship_max_shield_strength = p_objp->ship_max_shield_strength;
+	shipp->ship_max_hull_strength =  p_objp->ship_max_hull_strength;
 	shipp->max_shield_recharge_pct = p_objp->max_shield_recharge_percent;
 
 	for (i=0;i<MAX_SHIELD_SECTIONS;i++)
@@ -1955,7 +1955,7 @@ int parse_create_object_sub(p_object *p_objp)
 	// forcing the shields on or off depending on flags -- but only if shield strength supports it
 
 	// no strength means we can't have shields, period
-	if (sip->max_shield_strength * p_objp->ship_max_shield_strength_multiplier == 0.0f)
+	if (p_objp->ship_max_shield_strength == 0.0f)
 		Objects[objnum].flags |= OF_NO_SHIELDS;
 	// force shields on means we have them regardless of other flags; per r5332 this ranks above the next check
 	else if (p_objp->flags2 & P2_OF_FORCE_SHIELDS_ON)
@@ -2322,8 +2322,13 @@ int parse_create_object_sub(p_object *p_objp)
 	{
 		Objects[objnum].net_signature = p_objp->net_signature;
 
-		if ((Game_mode & GM_IN_MISSION) && MULTIPLAYER_MASTER && (p_objp->wingnum == -1))
-			send_ship_create_packet(&Objects[objnum], (p_objp == Arriving_support_ship) ? 1 : 0);
+		// Goober5000 - for an initially docked group, only send the packet for the dock leader... this is necessary so that the
+		// docked hierarchy of objects can be created in the right order on the client side
+		if (!object_is_docked(p_objp) || (p_objp->flags & P_SF_DOCK_LEADER))
+		{
+			if ((Game_mode & GM_IN_MISSION) && MULTIPLAYER_MASTER && (p_objp->wingnum == -1))
+				send_ship_create_packet(&Objects[objnum], (p_objp == Arriving_support_ship) ? 1 : 0);
+		}
 	}
 
 	return objnum;
@@ -2414,8 +2419,18 @@ void resolve_parse_flags(object *objp, int parse_flags, int parse_flags2)
 		objp->flags |= OF_PROTECTED;
 
 	if (parse_flags & P_SF_REINFORCEMENT)
-		shipp->flags |= SF_REINFORCEMENT;
-
+	{
+		//Individual ships in wings can't be reinforcements - FUBAR
+		if(shipp->wingnum >= 0)
+		{
+			Warning(LOCATION, "Ship %s is a reinforcement unit but is a member of a wing. Ignoring reinforcement flag.", shipp->ship_name);
+		}
+		else
+		{
+			shipp->flags |= SF_REINFORCEMENT;
+		}
+	}
+	
 	if ((parse_flags & P_OF_NO_SHIELDS) && (parse_flags2 & P2_OF_FORCE_SHIELDS_ON))
 	{
 		Warning(LOCATION, "The parser found a ship with both the \"force-shields-on\" and \"no-shields\" flags; this is inconsistent!");
@@ -3033,30 +3048,30 @@ int parse_object(mission *pm, int flag, p_object *p_objp)
 	}
 
 	// set custom shield value
-	if ((p_objp->special_shield != -1) && (Ship_info[p_objp->ship_class].max_shield_strength > 0.0f)) {
-		// the fact that we use a multiplier means we can't magically grant shields to ships which are tabled with 0 shields, unfortunately...
-		p_objp->ship_max_shield_strength_multiplier = (float) p_objp->special_shield / Ship_info[p_objp->ship_class].max_shield_strength;
-	} else {
-		p_objp->ship_max_shield_strength_multiplier = 1.0f;
+	if (p_objp->special_shield != -1) {
+		p_objp->ship_max_shield_strength = (float) p_objp->special_shield; 
+	}
+	else {
+		p_objp->ship_max_shield_strength = Ship_info[p_objp->ship_class].max_shield_strength;
 	}
 	
 	// set custom hitpoint value
 	if (p_objp->special_hitpoints > 0) {
-		p_objp->ship_max_hull_strength_multiplier = (float) p_objp->special_hitpoints / Ship_info[p_objp->ship_class].max_hull_strength; 
+		p_objp->ship_max_hull_strength = (float) p_objp->special_hitpoints; 
 	}
 	else {
-		p_objp->ship_max_hull_strength_multiplier = 1.0f;
+		p_objp->ship_max_hull_strength = Ship_info[p_objp->ship_class].max_hull_strength;
 	}
 
+	Assert(p_objp->ship_max_hull_strength > 0.0f);	// Goober5000: div-0 check (not shield because we might not have one)
 	p_objp->max_shield_recharge_percent = Ship_info[p_objp->ship_class].max_shield_recharge;
 
 	if (Ship_info[p_objp->ship_class].max_shield_strength > 0.0f) {
-		float shield_mult = p_objp->ship_max_shield_strength_multiplier / Ship_info[p_objp->ship_class].max_shield_strength;
+		float shield_mult = p_objp->ship_max_shield_strength / Ship_info[p_objp->ship_class].max_shield_strength;
 		for (i = 0; i < MAX_SHIELD_SECTIONS; i++)
 			p_objp->max_shield_segment_strength[i] = Ship_info[p_objp->ship_class].max_shield_segment_strength[i] * shield_mult;
 	}
 
-	Assert(p_objp->ship_max_hull_strength_multiplier > 0.0f);	// Goober5000: div-0 check (not shield because we might not have one)
 
 	// if the kamikaze flag is set, we should have the next flag
 	if (optional_string("+Kamikaze Damage:"))
@@ -3201,8 +3216,18 @@ int parse_object(mission *pm, int flag, p_object *p_objp)
 			}
 
 			// load the texture
-			p_objp->replacement_textures[p_objp->num_texture_replacements].new_texture_id = bm_load_either(p_objp->replacement_textures[p_objp->num_texture_replacements].new_texture);
+			if (!stricmp(p_objp->replacement_textures[p_objp->num_texture_replacements].new_texture, "invisible"))
+			{
+				// invisible is a special case
+				p_objp->replacement_textures[p_objp->num_texture_replacements].new_texture_id = REPLACE_WITH_INVISIBLE;
+			}
+			else
+			{
+				// try to load texture or anim as normal
+				p_objp->replacement_textures[p_objp->num_texture_replacements].new_texture_id = bm_load_either(p_objp->replacement_textures[p_objp->num_texture_replacements].new_texture);
+			}
 
+			// not found?
 			if (p_objp->replacement_textures[p_objp->num_texture_replacements].new_texture_id < 0)
 			{
 				mprintf(("Could not load replacement texture %s for ship %s\n", p_objp->replacement_textures[p_objp->num_texture_replacements].new_texture, p_objp->name));
@@ -3675,11 +3700,28 @@ void swap_parse_object(p_object *p_obj, int new_ship_class)
 	// Hitpoints
 	// We need to take into account that the ship might have been assigned special hitpoints so we can't 
 	// simply swap old for new. 
-	Assert (p_obj->ship_max_hull_strength_multiplier > 0.0f);
-	Assert (old_ship_info->max_hull_strength > 0.0f);
+	Assert (p_obj->ship_max_hull_strength > 0);
+	Assert (old_ship_info->max_hull_strength > 0);
 	
-	float hp_multiplier = (Ship_info[p_obj->ship_class].max_hull_strength * p_obj->ship_max_hull_strength_multiplier) / old_ship_info->max_hull_strength;
-	p_obj->ship_max_hull_strength_multiplier = (new_ship_info->max_hull_strength * hp_multiplier) / new_ship_info->max_hull_strength;
+	float hp_multiplier = p_obj->ship_max_hull_strength / old_ship_info->max_hull_strength;
+	p_obj->ship_max_hull_strength = new_ship_info->max_hull_strength * hp_multiplier;
+
+	// Shields
+	// Again we have to watch out for special hitpoints but this time we can't assume that there will be a 
+	// shield. So first lets see if there is one. 
+	if ((p_obj->ship_max_shield_strength != old_ship_info->max_shield_strength) && 
+		(p_obj->ship_max_shield_strength > 0) &&
+		(new_ship_info->max_shield_strength > 0))
+	{
+		// This ship is using special hitpoints to alter the shield strength
+		float shield_multiplier = p_obj->ship_max_shield_strength / i2fl(old_ship_info->max_shield_strength);
+		p_obj->ship_max_shield_strength = new_ship_info->max_shield_strength * shield_multiplier;
+	}
+	// Not using special hitpoints or a class which has a shield strength of zero
+	else
+	{
+		p_obj->ship_max_shield_strength = new_ship_info->max_shield_strength;
+	}
 	
 	// Primary weapons
 	// First find out what is the correct number for a ship of this class
@@ -4935,7 +4977,16 @@ void parse_reinforcement(mission *pm)
 			return;
 		}
 	} else {
-		instance = rforce_obj->wingnum;
+		// Individual ships in wings can't be reinforcements - FUBAR
+		if (rforce_obj->wingnum >= 0)
+		{
+			Warning(LOCATION, "Reinforcement %s is part of a wing - Ignoring reinforcement declaration", ptr->name);
+			return;
+		}
+		else
+		{
+			instance = rforce_obj->wingnum;
+		}
 	}
 
 	// now, if the reinforcement is a wing, then set the number of waves of the wing == number of
@@ -5264,7 +5315,7 @@ void parse_asteroid_fields(mission *pm)
 
 void parse_variables()
 {
-	int i, j, k, num_variables;
+	int i, j, num_variables = 0;
 
 	if (! optional_string("#Sexp_variables") ) {
 		return;
@@ -5274,45 +5325,45 @@ void parse_variables()
 
 	// yeesh - none of this should be done in FRED :)
 	// It shouldn't be done for missions in the tecroom either. They should default to whatever FRED set them to
-	if (!Fred_running && (Game_mode & GM_CAMPAIGN_MODE))
-	{
-		// Goober5000 - now set the default value, if it's a campaign-persistent variable
-		// look through all previous missions (by doing it this way, we will continually
-		// overwrite the variable with the most recent information)
-		for (i=0; i<Campaign.num_missions; i++)
-		{
-			if (Campaign.missions[i].completed != 1)
-				continue;
+	if ( Fred_running || !(Game_mode & GM_CAMPAIGN_MODE) ) {
+		return;
+	}
 
-			// loop through this particular previous mission's variables
-			for (j=0; j<Campaign.missions[i].num_saved_variables; j++)
-			{
-				// loop through the current mission's variables
-				for (k=0; k<num_variables; k++)
-				{
-					// if the active mission has a variable with the same name as a campaign
-					// variable AND it is not a block variable, override its initial value
-					// with the previous mission's value
-					if (!(stricmp(Sexp_variables[k].variable_name, Campaign.missions[i].saved_variables[j].variable_name)) ) {
-						Sexp_variables[k].type = Campaign.missions[i].saved_variables[j].type;
-						strcpy_s(Sexp_variables[k].text, Campaign.missions[i].saved_variables[j].text);
-					}
+	// Goober5000 - now set the default value, if it's a campaign-persistent variable
+	// loop through the current mission's variables
+	for (j = 0; j < num_variables; j++) {
+		// check against existing variables
+		for (i = 0; i < Campaign.num_variables; i++) {
+			// if the active mission has a variable with the same name as a campaign
+			// variable AND it is not a block variable, override its initial value
+			// with the previous mission's value
+			if ( !stricmp(Sexp_variables[j].variable_name, Campaign.variables[i].variable_name) ) {
+				if (Sexp_variables[j].type  & SEXP_VARIABLE_CAMPAIGN_PERSISTENT) {
+					Sexp_variables[j].type = Campaign.variables[i].type;
+					strcpy_s(Sexp_variables[j].text, Campaign.variables[i].text);
+					break;
+				} else {
+					WarningEx(LOCATION, "Variable %s has the same name as a campaign persistent variable. One of these should be renamed to avoid confusion", Sexp_variables[j].text);
 				}
 			}
 		}
+	}
 
-		// Goober5000 - next, see if any player-persistent variables are set
-		for (i=0; i<Player->num_variables; i++)
-		{
-			// loop through the current mission's variables
-			for (j=0; j<num_variables; j++)
-			{
-				// if the active mission has a variable with the same name as a player
-				// variable AND it is not a block variable, override its initial value
-				// with the previous mission's value
-				if (!(stricmp(Sexp_variables[j].variable_name, Player->player_variables[i].variable_name)) ) {
-					Sexp_variables[j].type = Player->player_variables[i].type;
-					strcpy_s(Sexp_variables[j].text, Player->player_variables[i].text);
+	// Goober5000 - next, see if any player-persistent variables are set
+	// loop through the current mission's variables
+	for (j = 0; j < num_variables; j++) {
+		// check against existing variables
+		for (i = 0; i < (int)Player->variables.size(); i++) {
+			// if the active mission has a variable with the same name as a player
+			// variable AND it is not a block variable, override its initial value
+			// with the previous mission's value
+			if ( !stricmp(Sexp_variables[j].variable_name, Player->variables[i].variable_name) ) {
+				if (Sexp_variables[j].type & SEXP_VARIABLE_PLAYER_PERSISTENT) {
+					Sexp_variables[j].type = Player->variables[i].type;
+					strcpy_s(Sexp_variables[j].text, Player->variables[i].text);
+					break;
+				} else {
+					WarningEx(LOCATION, "Variable %s has the same name as a player persistent variable. One of these should be renamed to avoid confusion", Sexp_variables[j].text);
 				}
 			}
 		}
@@ -6323,7 +6374,7 @@ int mission_set_arrival_location(int anchor, int location, int dist, int objnum,
 			return 0;
 		}
 		Objects[objnum].pos = pos;
-		Objects[objnum].orient.vec.fvec = fvec;
+		vm_vector_2_matrix(&Objects[objnum].orient, &fvec, NULL, NULL);
 	} else {
 
 		// AL: ensure dist > 0 (otherwise get errors in vecmat)
@@ -6807,30 +6858,50 @@ int ship_can_use_warp_drive(ship *shipp)
 }
 
 /**
- * Called to make object objp depart.
+ * Called to make object objp depart.  Rewritten and expanded by Goober5000.
  */
-int mission_do_departure(object *objp)
+int mission_do_departure(object *objp, bool goal_is_to_warp)
 {
-	Assert (objp->type == OBJ_SHIP);
+	Assert(objp->type == OBJ_SHIP);
 	int location, anchor, path_mask;
 	ship *shipp = &Ships[objp->instance];
+	ai_info *aip = &Ai_info[shipp->ai_index];
 
-	// Goober5000 - if this is a ship which has no subspace drive, departs to hyperspace, and belongs to a wing,
-	// then use the wing departure information
-	if ((shipp->flags2 & SF2_NO_SUBSPACE_DRIVE) && (shipp->departure_location == DEPART_AT_LOCATION) && (shipp->wingnum >= 0))
+	mprintf(("Entered mission_do_departure() for %s\n", shipp->ship_name));
+
+	// if our current goal is to warp, then we won't consider departing to a bay, because the goal explicitly says to warp out
+	// (this sort of goal can be assigned in FRED, either in the ship's initial orders or as the ai-warp-out goal)
+	if (goal_is_to_warp)
+	{
+		// aha, but not if we were ORDERED to depart, because the comms menu ALSO uses the goal code, and yet the comms menu means any departure method!
+		if ((shipp->flags & SF_DEPARTURE_ORDERED) || ((shipp->wingnum >= 0) && (Wings[shipp->wingnum].flags & WF_DEPARTURE_ORDERED)))
+		{
+			mprintf(("Looks like we were ordered to depart; initiating the standardard departure logic\n"));
+		}
+		// since our goal is to warp, then if we can warp, jump directly to the warping part
+		else if (ship_can_use_warp_drive(shipp))
+		{
+			mprintf(("Our current goal is to warp!  Trying to warp...\n"));
+			goto try_to_warp;
+		}
+		// otherwise, since we can't warp, we'll do the standard bay departure check, etc.
+	}
+
+	// if this ship belongs to a wing, then use the wing departure information
+	if (shipp->wingnum >= 0)
 	{
 		wing *wingp = &Wings[shipp->wingnum];
 
-		location = wingp->departure_location;
-		anchor = wingp->departure_anchor;
-		path_mask = wingp->departure_path_mask;
+		// copy the wing's departure information to the ship
+		// (needed because the bay departure code will check the ship's information again later on)
+		shipp->departure_location = wingp->departure_location;
+		shipp->departure_anchor = wingp->departure_anchor;
+		shipp->departure_path_mask = wingp->departure_path_mask;
 	}
-	else
-	{
-		location = shipp->departure_location;
-		anchor = shipp->departure_anchor;
-		path_mask = shipp->departure_path_mask;
-	}
+	
+	location = shipp->departure_location;
+	anchor = shipp->departure_anchor;
+	path_mask = shipp->departure_path_mask;
 
 	// if departing to a docking bay, try to find the anchor ship to depart to.  If not found, then
 	// just make it warp out like anything else.
@@ -6845,6 +6916,7 @@ int mission_do_departure(object *objp)
 		// see if ship is yet to arrive.  If so, then warp.
 		if (mission_parse_get_arrival_ship(name))
 		{
+			mprintf(("Anchor ship %s hasn't arrived yet!  Trying to warp...\n", name));
 			goto try_to_warp;
 		}
 
@@ -6853,6 +6925,7 @@ int mission_do_departure(object *objp)
 		anchor_shipnum = ship_name_lookup(name);
 		if (anchor_shipnum < 0)
 		{
+			mprintf(("Anchor ship %s not found!  Trying to warp...\n", name));
 			goto try_to_warp;
 		}
 
@@ -6865,6 +6938,7 @@ int mission_do_departure(object *objp)
 		// make sure fighterbays aren't destroyed
 		if (ship_fighterbays_all_destroyed(&Ships[anchor_shipnum]))
 		{
+			mprintf(("Anchor ship %s's fighterbays are destroyed!  Trying to warp...\n", name));
 			goto try_to_warp;
 		}
 
@@ -6873,19 +6947,20 @@ int mission_do_departure(object *objp)
 		{
 			MONITOR_INC(NumShipDepartures,1);
 
+			mprintf(("Acquired departure path\n"));
 			return 1;
 		}
 	}
 
 try_to_warp:
-	ai_info *aip = &Ai_info[shipp->ai_index];
 
-	// Goober5000 - make sure we can actually warp
+	// make sure we can actually warp
 	if (ship_can_use_warp_drive(shipp))
 	{
 		ai_set_mode_warp_out(objp, aip);
 		MONITOR_INC(NumShipDepartures,1);
 
+		mprintf(("Setting mode to warpout\n"));
 		return 1;
 	}
 	else
@@ -6895,6 +6970,7 @@ try_to_warp:
 		// find something else to do
 		aip->mode = AIM_NONE;
 
+		mprintf(("Can't warp!  Doing something else instead.\n"));
 		return 0;
 	}
 }
@@ -6978,12 +7054,7 @@ void mission_eval_departures()
 
 				Assert ( shipp->objnum != -1 );
 				objp = &Objects[shipp->objnum];
-				
-				// copy the wing's departure information to the ship
-				shipp->departure_location = Wings[shipp->wingnum].departure_location;
-				shipp->departure_anchor = Wings[shipp->wingnum].departure_anchor;
-				shipp->departure_path_mask = Wings[shipp->wingnum].departure_path_mask;
-				
+
 				mission_do_departure( objp );
 				// don't add to wingp->total_departed here -- this is taken care of in ship code.
 			}
@@ -7160,7 +7231,7 @@ continue_outer_loop:
 }
 
 /**
- * Look for <any friendly>, <any hostile player>, etc.
+ * Look for \<any friendly\>, \<any hostile player\>, etc.
  */
 int get_special_anchor(char *name)
 {
@@ -7368,8 +7439,8 @@ void mission_bring_in_support_ship( object *requester_objp )
 	}
 
 	// set support ship hitpoints
-	pobj->ship_max_hull_strength_multiplier = 1.0f;
-	pobj->ship_max_shield_strength_multiplier = 1.0f;
+	pobj->ship_max_hull_strength = Ship_info[i].max_hull_strength;
+	pobj->ship_max_shield_strength = Ship_info[i].max_shield_strength;
 	pobj->max_shield_recharge_percent = Ship_info[i].max_shield_recharge;
 	for (j = 0; j < MAX_SHIELD_SECTIONS; j++)
 		pobj->max_shield_segment_strength[j] = Ship_info[i].max_shield_segment_strength[j];
@@ -7525,20 +7596,19 @@ int mission_remove_scheduled_repair( object *objp )
 /**
  * Alternate name stuff
  */
-int mission_parse_lookup_alt(char *name)
+int mission_parse_lookup_alt(const char *name)
 {
 	int idx;
 
 	// sanity
-	if(name == NULL){
+	if(name == NULL)
 		return -1;
-	}
 
 	// lookup
-	for(idx=0; idx<Mission_alt_type_count; idx++){
-		if(!strcmp(Mission_alt_types[idx], name)){
+	for(idx=0; idx<Mission_alt_type_count; idx++)
+	{
+		if(!strcmp(Mission_alt_types[idx], name))
 			return idx;
-		}
 	}
 
 	// could not find
@@ -7549,11 +7619,13 @@ static int mission_parse_lookup_alt_index_warn = 1;
 void mission_parse_lookup_alt_index(int index, char *out)
 {
 	// sanity
-	if(out == NULL){
+	if(out == NULL)
 		return;
-	}
-	if((index < 0) || (index >= Mission_alt_type_count)){
-		if (mission_parse_lookup_alt_index_warn) {
+
+	if((index < 0) || (index >= Mission_alt_type_count))
+	{
+		if (mission_parse_lookup_alt_index_warn)
+		{
 			Warning(LOCATION, "Ship with invalid alt_name.  Get a programmer");
 			mission_parse_lookup_alt_index_warn = 0;
 		}
@@ -7564,23 +7636,44 @@ void mission_parse_lookup_alt_index(int index, char *out)
 	strcpy(out, Mission_alt_types[index]);
 }
 
-int mission_parse_add_alt(char *name)
+int mission_parse_add_alt(const char *name)
 {
 	// sanity
-	if(name == NULL){
+	if(name == NULL)
 		return -1;
-	}
 
 	// maybe add
-	if(Mission_alt_type_count < MAX_ALT_TYPE_NAMES){
+	if(Mission_alt_type_count < MAX_ALT_TYPE_NAMES)
+	{
 		// stuff the name
-		strncpy(Mission_alt_types[Mission_alt_type_count++], name, NAME_LENGTH);
+		strcpy_s(Mission_alt_types[Mission_alt_type_count++], name);
 
 		// done
 		return Mission_alt_type_count - 1;
 	}
 
 	return -1;
+}
+
+void mission_parse_remove_alt(const char *name)
+{
+	// sanity
+	if(name == NULL)
+		return;
+
+	// maybe remove
+	for (int i = 0; i < Mission_alt_type_count; ++i)
+	{
+		if (!strcmp(Mission_alt_types[i], name))
+		{
+			// remove this name by overwriting it with the last name
+			if (i < Mission_alt_type_count - 1)
+				strcpy_s(Mission_alt_types[i], Mission_alt_types[Mission_alt_type_count - 1]);
+
+			Mission_alt_type_count--;
+			break;
+		}
+	}
 }
 
 void mission_parse_reset_alt()
@@ -7591,20 +7684,19 @@ void mission_parse_reset_alt()
 /**
  * Callsign stuff
  */
-int mission_parse_lookup_callsign(char *name)
+int mission_parse_lookup_callsign(const char *name)
 {
 	int idx;
 
 	// sanity
-	if(name == NULL){
+	if(name == NULL)
 		return -1;
-	}
 
 	// lookup
-	for(idx=0; idx<Mission_callsign_count; idx++){
-		if(!strcmp(Mission_callsigns[idx], name)){
+	for(idx=0; idx<Mission_callsign_count; idx++)
+	{
+		if(!strcmp(Mission_callsigns[idx], name))
 			return idx;
-		}
 	}
 
 	// could not find
@@ -7615,11 +7707,13 @@ static int mission_parse_lookup_callsign_index_warn = 1;
 void mission_parse_lookup_callsign_index(int index, char *out)
 {
 	// sanity
-	if(out == NULL){
+	if(out == NULL)
 		return;
-	}
-	if((index < 0) || (index >= Mission_callsign_count)){
-		if (mission_parse_lookup_callsign_index_warn) {
+
+	if((index < 0) || (index >= Mission_callsign_count))
+	{
+		if (mission_parse_lookup_callsign_index_warn)
+		{
 			Warning(LOCATION, "Ship with invalid callsign.  Get a programmer");
 			mission_parse_lookup_callsign_index_warn = 0;
 		}
@@ -7630,23 +7724,44 @@ void mission_parse_lookup_callsign_index(int index, char *out)
 	strcpy(out, Mission_callsigns[index]);
 }
 
-int mission_parse_add_callsign(char *name)
+int mission_parse_add_callsign(const char *name)
 {
 	// sanity
-	if(name == NULL){
+	if(name == NULL)
 		return -1;
-	}
 
 	// maybe add
-	if(Mission_callsign_count < MAX_CALLSIGNS){
+	if(Mission_callsign_count < MAX_CALLSIGNS)
+	{
 		// stuff the name
-		strncpy(Mission_callsigns[Mission_callsign_count++], name, NAME_LENGTH);
+		strcpy_s(Mission_callsigns[Mission_callsign_count++], name);
 
 		// done
 		return Mission_callsign_count - 1;
 	}
 
 	return -1;
+}
+
+void mission_parse_remove_callsign(const char *name)
+{
+	// sanity
+	if(name == NULL)
+		return;
+
+	// maybe remove
+	for (int i = 0; i < Mission_callsign_count; ++i)
+	{
+		if (!strcmp(Mission_callsigns[i], name))
+		{
+			// remove this callsign by overwriting it with the last callsign
+			if (i < Mission_callsign_count - 1)
+				strcpy_s(Mission_callsigns[i], Mission_callsigns[Mission_callsign_count - 1]);
+
+			Mission_callsign_count--;
+			break;
+		}
+	}
 }
 
 void mission_parse_reset_callsign()

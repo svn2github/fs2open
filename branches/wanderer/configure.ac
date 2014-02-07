@@ -2,7 +2,7 @@ dnl configure.ac for fs2_open
 dnl
 dnl $Id: configure.ac,v 1.31.2.4 2007-05-28 19:36:12 taylor Exp $
 
-AC_INIT(fs2_open, 3.6.15)
+AC_INIT(fs2_open, 3.6.19)
 AC_CONFIG_SRCDIR(code/freespace2/freespace.cpp)
 
 dnl we need at least version 2.54 of autoconf
@@ -62,11 +62,11 @@ AC_ARG_ENABLE(speech,
 		[fs2_speech=no],
 )
 
-AC_ARG_ENABLE(inferno,
-	AC_HELP_STRING([--enable-inferno],
-		[Make an Inferno build (default = yes)]),
-		[fs2_inferno=$enableval],
-		[fs2_inferno=yes],
+AC_ARG_ENABLE(nowarn,
+	AC_HELP_STRING([--enable-nowarn],
+		[Make a Warning Suppression Build (NOT Recommended)]),
+		[fs2_nowarn=$enableval],
+		[fs2_nowarn=no],
 )
 
 AC_ARG_ENABLE(gprof,
@@ -116,13 +116,14 @@ case "$target" in
 		# linux
 		echo "Using 64-bit Unix defines (for $host_os)"
 		fs2_os_linux="yes"
-		D_CFLAGS="$D_CFLAGS -m64 -march=athlon64 -ansi"
+		D_CFLAGS="$D_CFLAGS -m64 -mtune=i686 -msse -msse2 -ansi"
 		D_CFLAGS="$D_CFLAGS -DLUA_USE_LINUX"
 		;;
 	*-*-linux*)
 		# linux
 		echo "Using Unix defines (for $host_os)"
 		fs2_os_linux="yes"
+		D_CFLAGS="$D_CFLAGS -mtune=i686 -mfpmath=sse -msse -msse2 -ansi"
 		D_CFLAGS="$D_CFLAGS -DLUA_USE_LINUX"
 		;;
 	*-*-darwin*)
@@ -183,8 +184,8 @@ esac
 
 dnl define compiler switches
 
-if test "$fs2_inferno" = "yes" ; then
-	AC_DEFINE([INF_BUILD])
+if test "$fs2_nowarn" = "yes" ; then
+	AC_DEFINE([Allow_NoWarn])
 fi
 
 if test "$fs2_speech" = "yes" ; then
@@ -217,17 +218,9 @@ if test "$fs2_debug" = "yes" ; then
 	D_LDFLAGS="$D_LDFLAGS -g"
 
 	if test "$fs2_fred" = "yes" ; then
-		if test "$fs2_inferno" = "yes" ; then
-			AC_SUBST(FS2_BINARY, ["wxFRED2_${PACKAGE_VERSION}_DEBUG"])
-		else
-			AC_SUBST(FS2_BINARY, ["wxFRED2_${PACKAGE_VERSION}_NOINF_DEBUG"])
-		fi
+		AC_SUBST(FS2_BINARY, ["wxFRED2_${PACKAGE_VERSION}_DEBUG"])
 	else
-		if test "$fs2_inferno" = "yes" ; then
-			AC_SUBST(FS2_BINARY, ["fs2_open_${PACKAGE_VERSION}_DEBUG"])
-		else
-			AC_SUBST(FS2_BINARY, ["fs2_open_${PACKAGE_VERSION}_NOINF_DEBUG"])
-		fi
+		AC_SUBST(FS2_BINARY, ["fs2_open_${PACKAGE_VERSION}_DEBUG"])
 	fi
 else
 	AC_DEFINE([NDEBUG])
@@ -235,17 +228,9 @@ else
 	D_LDFLAGS="$D_LDFLAGS "
 
 	if test "$fs2_fred" = "yes" ; then
-		if test "$fs2_inferno" = "yes" ; then
-			AC_SUBST(FS2_BINARY, ["wxFRED2_${PACKAGE_VERSION}"])
-		else
-			AC_SUBST(FS2_BINARY, ["wxFRED2_${PACKAGE_VERSION}_NOINF"])
-		fi
+		AC_SUBST(FS2_BINARY, ["wxFRED2_${PACKAGE_VERSION}"])
 	else
-		if test "$fs2_inferno" = "yes" ; then
-			AC_SUBST(FS2_BINARY, ["fs2_open_${PACKAGE_VERSION}"])
-		else
-			AC_SUBST(FS2_BINARY, ["fs2_open_${PACKAGE_VERSION}_NOINF"])
-		fi
+		AC_SUBST(FS2_BINARY, ["fs2_open_${PACKAGE_VERSION}"])
 	fi
 fi
 
@@ -384,9 +369,6 @@ if test "$fs2_os_win32" = "yes" ; then
 	FS2_LDFLAGS=$FS2_LDFLAGS" -L/c:/dxsdk/lib"
 fi
 
-dnl libpng
-FS2_LIBS="$FS2_LIBS -lpng"
-
 dnl OpenGL libs and CFLAGS
 if test "$fs2_os_win32" = "yes" ; then
 	if test "x$GL_LIBS" != "x" ; then
@@ -415,8 +397,13 @@ elif test "$fs2_os_solaris" = "yes" ; then
 	AC_DEFINE([NO_DIRECT3D])
 fi
 
-dnl PNG libs
-PKG_CHECK_MODULES([PNG], [libpng >= 1.2.20])
+dnl PNG libs (libpng, falling back to libpng12)
+PKG_CHECK_MODULES(
+	[PNG],
+	[libpng >= 1.2.20],
+	[], ## do nothing special
+	[PKG_CHECK_MODULES([PNG], [libpng12 >= 1.2.20])]
+	)
 D_CFLAGS=$D_CFLAGS" $PNG_CFLAGS"
 FS2_LIBS=$FS2_LIBS" $PNG_LIBS"
 
@@ -424,10 +411,10 @@ dnl LUA
 ## Checking for lua.pc and if that fails lua5.1.pc
 PKG_CHECK_MODULES(
 	[LUA],
-	[lua >= 5.1.3],
+	[lua >= 5.1.3 lua < 5.2],
 	[], ## do nothing special
-	[PKG_CHECK_MODULES([LUA], [lua5.1 >= 5.1.3], [], [
-        PKG_CHECK_MODULES([LUA], [lua-5.1 >= 5.1.3], [])
+	[PKG_CHECK_MODULES([LUA], [lua5.1 >= 5.1.3 lua5.1 < 5.2], [], [
+        PKG_CHECK_MODULES([LUA], [lua-5.1 >= 5.1.3 lua-5.1 < 5.2], [])
     ])])
 D_CFLAGS=$D_CFLAGS" $LUA_CFLAGS"
 FS2_LIBS=$FS2_LIBS" $LUA_LIBS"
@@ -500,8 +487,7 @@ if test "x$fs2_static_ogg" != "x" ; then
 fi
 echo
 echo Text-to-speech enabled . : $fs2_speech
-echo
+echo NoWarn Allowed ......... : $fs2_nowarn
 echo Debug build ............ : $fs2_debug
-echo Inferno build .......... : $fs2_inferno
 echo GProf support .......... : $fs2_gprof
 echo

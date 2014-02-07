@@ -300,7 +300,7 @@ char * GetChatText()
 }
 
 /**
- * Send a string to be sent as chat, or scanned for messages (/msg <user> string)
+ * Send a string to be sent as chat, or scanned for messages (/msg \<user\> string)
  */
 char * SendChatString(char *line,int raw)
 {
@@ -1108,7 +1108,7 @@ char * ParseIRCMessage(char *Line, int iMode)
 	if(stricmp(szCmd,"432")==0)
 	{
 		//Channel Mode info
-		snprintf(szResponse, SSIZE(szResponse), XSTR("Your nickname contains invalid characters", 640));
+		snprintf(szResponse, SSIZE(szResponse), "%s", XSTR("Your nickname contains invalid characters", 640));
 		AddChatCommandToQueue(CC_DISCONNECTED,NULL,0);
 		return szResponse;
 	}

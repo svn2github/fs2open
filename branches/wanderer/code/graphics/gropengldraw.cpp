@@ -635,6 +635,8 @@ void gr_opengl_line_htl(vec3d *start, vec3d *end)
 		end->xyz.x,		end->xyz.y,		end->xyz.z
 	};
 
+	GL_state.Array.BindArrayBuffer(0);
+	opengl_shader_set_current();
 
 	GL_state.Array.EnableClientVertex();
 	GL_state.Array.VertexPointer(3, GL_FLOAT, 0, line);
@@ -831,7 +833,8 @@ void gr_opengl_circle(int xc, int yc, int d, bool resize)
 	while (x < y) {
 		// Draw the first octant
 		gr_opengl_line(xc-y, yc-x, xc+y, yc-x, false);
-		gr_opengl_line(xc-y, yc+x, xc+y, yc+x, false);
+		if (x > 0) // Don't draw the center horizontal line twice
+			gr_opengl_line(xc-y, yc+x, xc+y, yc+x, false);
 
 		if (p < 0) {
 			p += (x << 2) + 6;
@@ -2088,6 +2091,7 @@ void gr_opengl_sphere_htl(float rad)
 	GL_state.SetTextureSource(TEXTURE_SOURCE_NONE);
 	GL_state.SetAlphaBlendMode(ALPHA_BLEND_NONE);
 	GL_state.SetZbufferType(ZBUFFER_TYPE_FULL);
+	opengl_shader_set_current();
 
 	GL_state.Color(gr_screen.current_color.red, gr_screen.current_color.green, gr_screen.current_color.blue);
 

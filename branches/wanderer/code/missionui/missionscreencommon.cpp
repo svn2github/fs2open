@@ -99,6 +99,7 @@ extern void ss_reset_team_pointers();
 extern void wl_set_team_pointers(int team);
 extern void wl_reset_team_pointers();
 extern int anim_timer_start;
+extern void ss_reset_selected_ship();
 
 //////////////////////////////////////////////////////////////////
 // UI 
@@ -506,6 +507,8 @@ void common_select_init()
 		}
 	}
 	
+	ss_reset_selected_ship();
+
 	Drop_icon_mflag = 0;
 	Drop_on_wing_mflag = 0;
 
@@ -1027,6 +1030,11 @@ void wss_maybe_restore_loadout()
 
 	Assert( (Ss_pool != NULL) && (Wl_pool != NULL) && (Wss_slots != NULL) );
 
+	// only restore if mission hasn't changed
+	if ( stricmp(Player_loadout.last_modified, The_mission.modified) ) {
+		return;
+	}
+
 	// first we generate a pool of ships and weapons used the last time this mission was played. We also generate a pool of what is 
 	// available in this mission.
 	int	last_loadout_ships[MAX_SHIP_CLASSES];
@@ -1075,14 +1083,18 @@ void wss_maybe_restore_loadout()
 	// now compare the two, adding in what was left in the pools. If there are less of a ship or weapon class in the mission now
 	// than there were last time, we can't restore and must abort.
 	for (i = 0; i < MAX_SHIP_CLASSES; i++) {
-		this_loadout_ships[i] += Ss_pool[i];
+		if (Ss_pool[i] >= 1) {
+			this_loadout_ships[i] += Ss_pool[i];
+		}
 		if ( this_loadout_ships[i] < last_loadout_ships[i]) {
 			return; 
 		}
 	}
 	
 	for (i = 0; i < MAX_WEAPON_TYPES; i++) {
-		this_loadout_weapons[i] += Wl_pool[i];
+		if (Wl_pool[i] >= 1) {
+			this_loadout_weapons[i] += Wl_pool[i];
+		}
 		if ( this_loadout_weapons[i] < last_loadout_weapons[i]) {
 			return; 
 		}
@@ -1672,7 +1684,7 @@ void draw_model_rotating(int model_id, int x1, int y1, int x2, int y2, float *ro
 		}
 		g3_done_instance(true);
 
-		gr_zbuffer_set(GR_ZBUFF_NONE); // Turn of Depthbuffer so we dont get gridlines over the ship or a disappearing scanline 
+		gr_zbuffer_set(GR_ZBUFF_NONE); // Turn off Depthbuffer so we don't get gridlines over the ship or a disappearing scanline 
 		Glowpoint_use_depth_buffer = false; // Since we don't have one
 		if (time >= 0.5f) { // Phase 1 onward draw the grid
 			int i;
@@ -1741,7 +1753,7 @@ void draw_model_rotating(int model_id, int x1, int y1, int x2, int y2, float *ro
 			}
 		}
 
-		gr_zbuffer_set(GR_ZBUFF_FULL); // Turn of depthbuffer again
+		gr_zbuffer_set(GR_ZBUFF_FULL); // Turn off depthbuffer again
 
 		batch_render_all();
 		Glowpoint_use_depth_buffer = true; // Back to normal

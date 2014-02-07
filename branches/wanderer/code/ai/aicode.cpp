@@ -2829,7 +2829,7 @@ void ai_find_path(object *pl_objp, int objnum, int path_num, int exit_flag, int 
 
 			ship	*shipp = &Ships[objp->instance];
 			pm = model_get(Ship_info[shipp->ship_info_index].model_num);
-			if(pm->n_paths <= path_num)
+			if(path_num >= pm->n_paths)
 				Error(LOCATION,"ai_find_path tring to find a path (%d) that doesn't exist, on ship %s", path_num, shipp->ship_name);
 
 			aip->goal_objnum = objnum;
@@ -9044,14 +9044,25 @@ float dock_orient_and_approach(object *docker_objp, int docker_index, object *do
 			//	Note, we're interested in distance from goal, so if we're still turning, bash that into return value.
 			fdist += 10.0f * vm_vec_mag_quick(&omega_out);
 		} else {
-			vec3d offset;
-
 			Assert(dock_mode == DOA_DOCK_STAY);
-			
-			docker_objp->orient = dom;
+			matrix temp, m_offset;
+			vec3d origin_docker_point, adjusted_docker_point, v_offset;
 
-			vm_vec_sub(&offset, &dockee_point, &docker_point);
-			vm_vec_add2(&docker_objp->pos, &offset);
+			// find out the rotation matrix that will get us from the old to the new rotation
+			vm_copy_transpose_matrix(&temp, &docker_objp->orient);
+			vm_matrix_x_matrix(&m_offset, &temp, &dom);
+
+			// now find out the new docker point after being adjusted for the new orientation
+			vm_vec_sub(&origin_docker_point, &docker_point, &docker_objp->pos);
+			vm_vec_rotate(&adjusted_docker_point, &origin_docker_point, &m_offset);
+			vm_vec_add2(&adjusted_docker_point, &docker_objp->pos);
+
+			// find the vector that will get us from the old to the new position
+			vm_vec_sub(&v_offset, &dockee_point, &adjusted_docker_point);
+			
+			// now set the new rotation and move to the new position
+			docker_objp->orient = dom;
+			vm_vec_add2(&docker_objp->pos, &v_offset);
 		}
 
 		break;
@@ -12570,7 +12581,7 @@ int ai_acquire_depart_path(object *pl_objp, int parent_objnum, int allowed_path_
 	shipp->bay_doors_launched_from = (ubyte)ship_bay_path;
 	shipp->bay_doors_parent_shipnum = parent_objp->instance;
 
-	Assert(pm->n_paths > path_index);
+	Assert(path_index < pm->n_paths);
 	ai_find_path(pl_objp, parent_objnum, path_index, 0);
 
 	// Set this flag, so we don't bother recreating the path... we won't need to update the path
@@ -14117,6 +14128,12 @@ int combine_flags(int base_flags, int override_flags, int override_set)
 //just says which flags are set.
 void init_aip_from_class_and_profile(ai_info *aip, ai_class *aicp, ai_profile_t *profile)
 {
+	// since we use it so much in this function, sanity check the value for Game_skill_level
+	if (Game_skill_level < 0 || Game_skill_level >= NUM_SKILL_LEVELS) {
+		Warning(LOCATION, "Invalid skill level %i! Valid range 0 to %i. Resetting to default.", Game_skill_level, NUM_SKILL_LEVELS);
+		Game_skill_level = game_get_default_skill_level();
+	}
+
 	//ai_class-only stuff
 	aip->ai_courage = aicp->ai_courage[Game_skill_level];
 	aip->ai_patience = aicp->ai_patience[Game_skill_level];

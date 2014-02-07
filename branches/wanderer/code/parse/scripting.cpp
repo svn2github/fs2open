@@ -333,8 +333,8 @@ bool ConditionedHook::ConditionsValid(int action, object *objp, int more_data)
 								break;
 							case CHA_ONWPEQUIPPED: {
 								bool equipped = false;
-								for(int j = 0; j < 3; j++) {
-									if (!equipped) {
+								for(int j = 0; j < MAX_SHIP_PRIMARY_BANKS; j++) {
+									if (!equipped && (shipp->weapons.primary_bank_weapons[j] >= 0) && (shipp->weapons.primary_bank_weapons[j] < MAX_WEAPON_TYPES) ) {
 										if ( !stricmp(Weapon_info[shipp->weapons.primary_bank_weapons[j]].name, scp->data.name) ) {
 											equipped = true;
 											break;
@@ -343,8 +343,8 @@ bool ConditionedHook::ConditionsValid(int action, object *objp, int more_data)
 								}
 							
 								if (!equipped) {
-									for(int j = 0; j < 4; j++) {
-										if (!equipped) {
+									for(int j = 0; j < MAX_SHIP_SECONDARY_BANKS; j++) {
+										if (!equipped && (shipp->weapons.secondary_bank_weapons[j] >= 0) && (shipp->weapons.secondary_bank_weapons[j] < MAX_WEAPON_TYPES) ) {
 											if ( !stricmp(Weapon_info[shipp->weapons.secondary_bank_weapons[j]].name, scp->data.name) ) {
 												equipped = true;
 												break;

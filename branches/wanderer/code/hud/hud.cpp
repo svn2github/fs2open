@@ -451,6 +451,10 @@ void HudGauge::updateCustomGaugeFrame(int frame_offset)
 	if(!custom_gauge) {
 		return;
 	}
+	
+	if (frame_offset < 0 ||frame_offset > custom_frame.num_frames) {
+		return;
+	}
 
 	custom_frame_offset = frame_offset;
 }
@@ -1086,6 +1090,8 @@ void HudGauge::initialize()
 	//Reset text to default
 	custom_text = default_text;
 
+	custom_frame_offset = 0;
+
 	sexp_lock_color = false;
 }
 
@@ -1654,7 +1660,7 @@ void hud_render_preprocess(float frametime)
 	// process asteroid brackets if necessary
 	hud_show_asteroid_brackets();
 
-	// process targetting data around the current target
+	// process targeting data around the current target
 	hud_show_targeting_gauges(frametime);
 
 	// process brackets and distance to remote detonate missile
@@ -2896,7 +2902,7 @@ void HudGaugeSupport::render(float frametime)
 		if ( Hud_support_objnum == -1 ) {
 			if (The_mission.support_ships.arrival_location == ARRIVE_FROM_DOCK_BAY)
 			{
-				strcpy_s(outstr, XSTR( "exiting hangar", -1));
+				strcpy_s(outstr, XSTR( "exiting hangar", 1622));
 			}
 			else
 			{

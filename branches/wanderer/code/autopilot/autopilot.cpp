@@ -225,7 +225,7 @@ extern object* Autopilot_flight_leader;
 //        * Control switched from player to AI
 //        * Time compression to 32x
 //        * Lock time compression -WMC
-//        * Tell AI to fly to targetted Nav Point (for all nav-status wings/ships)
+//        * Tell AI to fly to targeted Nav Point (for all nav-status wings/ships)
 //		  * Sets max waypoint speed to the best-speed of the slowest ship tagged
 bool StartAutopilot()
 {
@@ -704,9 +704,9 @@ bool StartAutopilot()
 
 				vm_vec_add(&Objects[Ships[*idx].objnum].pos, &Autopilot_flight_leader->pos, &offset);
 
-				if (vm_vec_dist_quick(&Autopilot_flight_leader->pos, &Objects[Ships[i].objnum].pos) > distance)
+				if (vm_vec_dist_quick(&Autopilot_flight_leader->pos, &Objects[Ships[*idx].objnum].pos) > distance)
 				{
-					distance = vm_vec_dist_quick(&Autopilot_flight_leader->pos, &Objects[Ships[i].objnum].pos);
+					distance = vm_vec_dist_quick(&Autopilot_flight_leader->pos, &Objects[Ships[*idx].objnum].pos);
 				}
 			}
 		}
@@ -1447,7 +1447,7 @@ bool AddNav_Waypoint(char *Nav, char *WP_Path, int node, int flags)
 	// Create the NavPoint struct
 	NavPoint tnav;
 
-	strncpy(tnav.m_NavName, Nav, 32);
+	strncpy(tnav.m_NavName, Nav, TOKEN_LENGTH);
 	tnav.flags = NP_WAYPOINT | flags;
 
 	Assert(!(tnav.flags & NP_SHIP));
