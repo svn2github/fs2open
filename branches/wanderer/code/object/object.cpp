@@ -104,6 +104,58 @@ obj_flag_name Object_flag_names[] = {
 	{OF_IMMOBILE,				"immobile",					1,	},
 };
 
+// all we need to set are the pointers, but type, parent, and instance are useful to set as well
+object::object()
+	: next(NULL), prev(NULL), type(OBJ_NONE), parent(-1), instance(-1), dock_list(NULL), dead_dock_list(NULL)
+{}
+
+object::~object()
+{
+	objsnd_num.clear();
+
+	if (dock_list != NULL)
+	{
+		mprintf(("dock_list should have been cleared already!\n"));
+		dock_instance *ptr = dock_list;
+		while (ptr != NULL)
+		{
+			dock_instance *nextptr = ptr->next;
+			vm_free(ptr);
+			ptr = nextptr;
+		}
+	}
+	if (dead_dock_list != NULL)
+	{
+		mprintf(("dead_dock_list should have been cleared already!\n"));
+		dock_instance *ptr = dead_dock_list;
+		while (ptr != NULL)
+		{
+			dock_instance *nextptr = ptr->next;
+			vm_free(ptr);
+			ptr = nextptr;
+		}
+	}
+}
+
+// DO NOT set next and prev to NULL because they keep the object on the free and used lists
+void object::clear()
+{
+	signature = num_pairs = collision_group_id = 0;
+	parent = parent_sig = instance = -1;
+	type = parent_type = OBJ_NONE;
+	flags = 0;
+	pos = last_pos = vmd_zero_vector;
+	orient = last_orient = vmd_identity_matrix;
+	radius = hull_strength = sim_hull_strength = 0.0f;
+	physics_init( &phys_info );
+	memset(shield_quadrant, 0, MAX_SHIELD_SECTIONS * sizeof(float));
+	objsnd_num.clear();
+	net_signature = 0;
+
+	Assertion(dock_list == NULL, "dock_list should have been cleared already!");
+	Assertion(dead_dock_list == NULL, "dead_dock_list should have been cleared already!");
+}
+
 /**
  * Scan the object list, freeing down to num_used objects
  *
@@ -302,7 +354,8 @@ void obj_init()
 	object *objp;
 	
 	Object_inited = 1;
-	memset( Objects, 0, sizeof(object)*MAX_OBJECTS );
+	for (i = 0; i < MAX_OBJECTS; ++i)
+		Objects[i].clear();
 	Viewer_obj = NULL;
 
 	list_init( &obj_free_list );
@@ -312,16 +365,12 @@ void obj_init()
 	// Link all object slots into the free list
 	objp = Objects;
 	for (i=0; i<MAX_OBJECTS; i++)	{
-		objp->type = OBJ_NONE;
-		objp->signature = i + 100;
-		objp->collision_group_id = 0;
-		
 		list_append(&obj_free_list, objp);
 		objp++;
 	}
 
 	Object_next_signature = 1;	//0 is invalid, others start at 1
-	Num_objects = 0;			
+	Num_objects = 0;
 	Highest_object_index = 0;
 
 	if ( Cmdline_old_collision_sys ) {
@@ -347,7 +396,10 @@ int obj_allocate(void)
 	int objnum;
 	object *objp;
 
-	if (!Object_inited) obj_init();
+	if (!Object_inited) {
+		mprintf(("Why hasn't obj_init() been called yet?\n"));
+		obj_init();
+	}
 
 	if ( Num_objects >= MAX_OBJECTS-10 ) {
 		int	num_freed;
@@ -402,7 +454,10 @@ void obj_free(int objnum)
 {
 	object *objp;
 
-	if (!Object_inited) obj_init();
+	if (!Object_inited) {
+		mprintf(("Why hasn't obj_init() been called yet?\n"));
+		obj_init();
+	}
 
 	Assert( objnum >= 0 );	// Trying to free bogus object!!!
 
@@ -410,7 +465,7 @@ void obj_free(int objnum)
 	objp = &Objects[objnum];
 
 	// remove objp from the used list
-	list_remove( &obj_used_list, objp);
+	list_remove( &obj_used_list, objp );
 
 	// add objp to the end of the free
 	list_append( &obj_free_list, objp );
@@ -448,6 +503,9 @@ int obj_create(ubyte type,int parent_obj,int instance, matrix * orient,
 	obj = &Objects[objnum];
 	Assert(obj->type == OBJ_NONE);		//make sure unused 
 
+	// clear object in preparation for setting of custom values
+	obj->clear();
+
 	Assert(Object_next_signature > 0);	// 0 is bogus!
 	obj->signature = Object_next_signature++;
 
@@ -468,21 +526,11 @@ int obj_create(ubyte type,int parent_obj,int instance, matrix * orient,
 		obj->last_pos			= *pos;
 	}
 
-	obj->orient 				= orient?*orient:vmd_identity_matrix;
-	obj->last_orient			= obj->orient;
+	if (orient)	{
+		obj->orient 			= *orient;
+		obj->last_orient		= *orient;
+	}
 	obj->radius 				= radius;
-
-	obj->flags &= ~OF_INVULNERABLE;		//	Make vulnerable.
-	physics_init( &obj->phys_info );
-
-	obj->num_pairs = 0;
-	obj->net_signature = 0;			// be sure to reset this value so new objects don't take on old signatures.	
-
-	obj->collision_group_id = 0;
-
-	// Goober5000
-	obj->dock_list = NULL;
-	obj->dead_dock_list = NULL;
 
 	return objnum;
 }
@@ -584,7 +632,7 @@ void obj_delete(int objnum)
 	obj_snd_delete_type(OBJ_INDEX(objp));		
 
 	objp->type = OBJ_NONE;		//unused!
-	objp->signature = 0;		
+	objp->signature = 0;
 
 	obj_free(objnum);
 }
@@ -595,7 +643,10 @@ void obj_delete_all_that_should_be_dead()
 {
 	object *objp, *temp;
 
-	if (!Object_inited) obj_init();
+	if (!Object_inited) {
+		mprintf(("Why hasn't obj_init() been called yet?\n"));
+		obj_init();
+	}
 
 	// Move all objects
 	objp = GET_FIRST(&obj_used_list);
@@ -694,6 +745,8 @@ void obj_player_fire_stuff( object *objp, control_info ci )
 	shipp = NULL;
 	if((objp->type == OBJ_SHIP) && (objp->instance >= 0) && (objp->instance < MAX_SHIPS)){
 		shipp = &Ships[objp->instance];
+	} else {
+		return;
 	}
 
 	// single player pilots, and all players in multiplayer take care of firing their own primaries
@@ -1885,7 +1938,7 @@ void obj_reset_all_collisions()
 
 		// next
 		moveup = GET_NEXT(moveup);
-	}		
+	}
 }
 
 // Goober5000
@@ -1946,6 +1999,8 @@ bool object_glide_forced(object *objp)
  */
 int obj_get_by_signature(int sig)
 {
+	Assert(sig > 0);
+
 	object *objp = GET_FIRST(&obj_used_list);
 	while( objp !=END_OF_LIST(&obj_used_list) )
 	{

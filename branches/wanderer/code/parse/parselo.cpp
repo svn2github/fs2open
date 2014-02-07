@@ -1683,6 +1683,8 @@ int strip_comments(char *line, int in_multiline_comment)
 	if (in_multiline_comment)
 	{
 		ch = strstr(line, "*/");
+		if (ch == NULL)
+			ch = strstr(line, "*!");
 		if (ch != NULL)
 		{
 			char *writep = line;
@@ -1706,15 +1708,6 @@ int strip_comments(char *line, int in_multiline_comment)
 		// can't close it, so drop the whole line
 		ch = line;
 		goto done_with_line;
-	}
-
-
-	// start of a multi-line comment?
-	ch = strstr(line, "/*");
-	if (ch != NULL)
-	{
-		// treat it as the beginning of a new line and recurse
-		return strip_comments(ch, 1);
 	}
 
 
@@ -1781,10 +1774,10 @@ int strip_comments(char *line, int in_multiline_comment)
 			}
 		}
 
-	
+
 		// this version is compatible, so copy the line past the tag
 		{
-			char *writep = line;
+			char *writep = ch;
 			char *readp = linech;
 
 			// copy all characters past the close of the comment
@@ -1799,7 +1792,7 @@ int strip_comments(char *line, int in_multiline_comment)
 			*writep = '\0';
 
 			// recurse with the other characters
-			return strip_comments(line, 0);
+			return strip_comments(ch, 0);
 		}
 	}
 
@@ -1808,6 +1801,19 @@ int strip_comments(char *line, int in_multiline_comment)
 	ch = strchr(line, ';');
 	if (ch != NULL)
 		goto done_with_line;
+
+
+	// start of a multi-line comment?
+	// (You can now use !* *! in addition to /* */ because prior to 3.7.1, a /* would be flagged
+	// even if it appeared after an initial ; such as in a version-specific comment.
+	ch = strstr(line, "/*");
+	if (ch == NULL)
+		ch = strstr(line, "!*");
+	if (ch != NULL)
+	{
+		// treat it as the beginning of a new line and recurse
+		return strip_comments(ch, 1);
+	}
 
 
 	// no comments found... try to find the newline
@@ -2645,6 +2651,24 @@ int stuff_string_list(char slp[][NAME_LENGTH], int max_strings)
 	return count;
 }
 
+const char* get_lookup_type_name(int lookup_type) 
+{
+	switch (lookup_type) {
+		case SHIP_TYPE:
+			return "Ships";
+		case SHIP_INFO_TYPE:
+			return "Ship Classes";
+		case WEAPON_POOL_TYPE:
+			return "Weapon Pool";
+		case WEAPON_LIST_TYPE:
+			return "Weapon Types";
+		case RAW_INTEGER_TYPE:
+			return "Untyped integer list";
+	}
+
+	return "Unknown lookup type, tell a coder!";
+}
+
 //	Stuffs an integer list.
 //	This is of the form ( i* )
 //	  where i is an integer.
@@ -2663,7 +2687,7 @@ int stuff_int_list(int *ilp, int max_ints, int lookup_type)
 	ignore_white_space();
 
 	while (*Mp != ')') {
-		Assert(count < max_ints);
+		Assertion(count < max_ints, "Too many entries in integer list. Expected %d, found %d.\nList type was %s", max_ints, count+1, get_lookup_type_name(lookup_type));
 		if (*Mp == '"') {
 			int num = 0;
 			char str[128];
@@ -3689,9 +3713,9 @@ void vsprintf(SCP_string &dest, const char *format, va_list ap)
 		buf_src_len = 1;
 		do {
 			++p;
-			if (!*p || (buf_src_len >= MAX_BUF))
+			if (!*p || (buf_src_len >= MAX_BUF-1))
 			{
-				Warning(LOCATION, "Could not find a sprintf specifier within %d characters for format '%s', pos %d!", MAX_BUF, format, (p - format));
+				Warning(LOCATION, "Could not find a sprintf specifier within %d characters for format '%s', pos %d!", MAX_BUF-1, format, (p - format));
 
 				// unsafe to continue handling this va_list
 				dest += buf_src;
@@ -3740,6 +3764,7 @@ void vsprintf(SCP_string &dest, const char *format, va_list ap)
 				pint = va_arg(ap, int *);
 				Assert(pint != NULL);
 				*pint = dest.length();
+				break;
 			}
 			case '%':
 			{

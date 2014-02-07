@@ -267,15 +267,11 @@ void brief_init_colors();
 
 void fred_preload_all_briefing_icons()
 {
-	uint i,j;
-	for (i = 0; i < Species_info.size(); i++)
+	for (SCP_vector<briefing_icon_info>::iterator ii = Briefing_icon_info.begin(); ii != Briefing_icon_info.end(); ++ii)
 	{
-		for (j = 0; j < MAX_BRIEF_ICONS; j++)
-		{
-			generic_anim_load(&Species_info[i].icon_bitmaps[j]);
-			hud_anim_load(&Species_info[i].icon_fade_anims[j]);
-			hud_anim_load(&Species_info[i].icon_highlight_anims[j]);
-		}
+		generic_anim_load(&ii->regular);
+		hud_anim_load(&ii->fade);
+		hud_anim_load(&ii->highlight);
 	}
 }
 
@@ -384,6 +380,8 @@ bool fred_init()
 	iff_init();			// Goober5000
 	species_init();		// Kazan
 
+	brief_parse_icon_tbl();
+
 	// for fred specific replacement texture stuff
 	//Fred_texture_replacements = (texture_replace*) vm_malloc( sizeof(texture_replace) * MAX_SHIPS * MAX_REPLACEMENT_TEXTURES );
 	Fred_texture_replacements = new texture_replace[MAX_SHIPS*MAX_REPLACEMENT_TEXTURES];
@@ -432,7 +430,6 @@ bool fred_init()
 	neb2_init();						// fullneb stuff
 	stars_init();
 	brief_init_colors();
-	brief_parse_icon_tbl();
 	fred_preload_all_briefing_icons(); //phreak.  This needs to be done or else the briefing icons won't show up
 	event_music_init();
 	fiction_viewer_reset();
@@ -1365,8 +1362,16 @@ int common_object_delete(int obj)
 			if(jnp->GetSCPObject() == &Objects[obj])
 				break;
 		}
+
+		// come on, WMC, we don't want to call obj_delete twice...
+		// fool the destructor into not calling obj_delete yet
+		Objects[obj].type = OBJ_NONE;
 		
+		// now call the destructor
 		Jump_nodes.erase(jnp);
+
+		// now restore the jump node type so that the below unmark and obj_delete will work
+		Objects[obj].type = OBJ_JUMP_NODE;
 	}
 
 	unmark_object(obj);

@@ -14,8 +14,9 @@
 #include "graphics/2d.h"
 #include "hud/hudparse.h"
 #include "globalincs/vmallocator.h"
+#include "graphics/font.h"
 
-struct object;
+class object;
 struct cockpit_display;
 
 typedef struct hud_anim {
@@ -26,13 +27,6 @@ typedef struct hud_anim {
 	int sx, sy;			// screen (x,y) of top-left corner of animation
 	float total_time;	// total time in seconds for the animation (depends on animation fps)
 	float time_elapsed;	// time that has elapsed (in seconds) since animation started playing
-
-	hud_anim( )
-		: first_frame( 0 ), num_frames( 0 ), sx( 0 ), sy( 0 ),
-		  total_time( 0 ), time_elapsed( 0 )
-	{
-		filename[ 0 ] = 0;
-	}
 } hud_anim;
 
 typedef struct hud_frames {
@@ -140,7 +134,7 @@ void HUD_set_clip(int x, int y, int w, int h);
 void hud_start_text_flash(const char *txt, int t, int interval = 200);
 
 // convert a string to use mono spaced numbers
-void hud_num_make_mono(char *num_str);
+void hud_num_make_mono(char *num_str, int font_num = FONT1);
 
 // functions for handling hud animations
 void hud_anim_init(hud_anim *ha, int sx, int sy, const char *filename);

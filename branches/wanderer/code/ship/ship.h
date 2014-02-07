@@ -33,7 +33,7 @@
 
 #include <string>
 
-struct object;
+class object;
 class WarpEffect;
 
 //	Part of the player died system.
@@ -517,7 +517,10 @@ typedef struct ship_spark {
 #define AWACS_WARN_25		(1 << 1)
 #define AWACS_WARN_75		(1 << 2)
 
-typedef struct ship {
+// NOTE: Can't be treated as a struct anymore, since it has STL data structures in its object tree!
+class ship
+{
+public:
 	int	objnum;
 	int	ai_index;			// Index in Ai_info of ai_info associated with this ship.
 	int	ship_info_index;	// Index in ship_info for this ship
@@ -542,15 +545,13 @@ typedef struct ship {
 
 	// targeting laser info
 	char targeting_laser_bank;						// -1 if not firing, index into polymodel gun points if it _is_ firing
+	int targeting_laser_objnum;					// -1 if invalid, beam object # otherwise
+
 	// corkscrew missile stuff
 	ubyte num_corkscrew_to_fire;						// # of corkscrew missiles lef to fire
 	int corkscrew_missile_bank;
-	// END PACK
-
-	// targeting laser info
-	int targeting_laser_objnum;					// -1 if invalid, beam object # otherwise
-	// corkscrew missile stuff
 	int next_corkscrew_fire;						// next time to fire a corkscrew missile
+	// END PACK
 
 	int	final_death_time;				// Time until big fireball starts
 	int	death_time;				// Time until big fireball starts
@@ -800,7 +801,10 @@ typedef struct ship {
 	int team_change_time;
 
 	float autoaim_fov;
-} ship;
+
+	// reset to a completely blank ship
+	void clear();
+};
 
 struct ai_target_priority {
 	char name[NAME_LENGTH];
@@ -1329,6 +1333,9 @@ public:
 	char	overhead_filename[MAX_FILENAME_LEN];	// filename for animation that plays weapons loadout
 	int 	selection_effect;
 
+	int bii_index_ship;						// if this ship has a briefing icon that overrides the normal icon set
+	int bii_index_wing;
+
 	int	score;								// default score for this ship
 
 	int	scan_time;							// time to scan this ship (in ms)
@@ -1710,7 +1717,7 @@ extern int	ship_do_rearm_frame( object *objp, float frametime );
 extern float ship_calculate_rearm_duration( object *objp );
 extern void	ship_wing_cleanup( int shipnum, wing *wingp );
 
-extern object *ship_find_repair_ship( object *requester );
+extern int ship_find_repair_ship( object *requester_obj, object **ship_we_found = NULL );
 extern void ship_close();	// called in game_shutdown() to free malloced memory
 
 
@@ -1810,7 +1817,7 @@ int get_max_ammo_count_for_primary_bank(int ship_class, int bank, int ammo_type)
 
 int get_max_ammo_count_for_bank(int ship_class, int bank, int ammo_type);
 
-int is_support_allowed(object *objp);
+int is_support_allowed(object *objp, bool do_simple_check = false);
 
 // Given an object and a turret on that object, return the actual firing point of the gun
 // and its normal.   This uses the current turret angles.  We are keeping track of which
@@ -1895,9 +1902,6 @@ float ship_get_warpout_speed(object *objp);
 
 // returns true if ship is beginning to speed up in warpout
 int ship_is_beginning_warpout_speedup(object *objp);
-
-// given a ship info type, return a species
-int ship_get_species_by_type(int ship_info_index);
 
 // return the length of the ship class
 float ship_class_get_length(ship_info *sip);

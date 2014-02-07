@@ -162,6 +162,7 @@ int ship_weapon_check_collision(object *ship_objp, object *weapon_objp, float ti
 
 
 	// Goober5000 - I tried to make collision code here much saner... here begin the (major) changes
+	mc_info_init(&mc);
 
 	// set up collision structs
 	mc.model_instance_num = shipp->model_instance_num;
@@ -293,6 +294,13 @@ int ship_weapon_check_collision(object *ship_objp, object *weapon_objp, float ti
 		} else if (sip->flags2 & SIF2_SURFACE_SHIELDS) {
 			mc_shield.flags = MC_CHECK_MODEL;
 			shield_collision = model_collide(&mc_shield);
+
+			// Because we used MC_CHECK_MODEL, the returned hit position might be
+			// in a submodel's frame of reference, so we need to ensure we end up
+			// in the ship's frame of reference
+			vec3d local_pos;
+			vm_vec_sub(&local_pos, &mc_shield.hit_point_world, &ship_objp->pos);
+			vm_vec_rotate(&mc_shield.hit_point, &local_pos, &ship_objp->orient);
 		} else {
 			// Normal collision check against a shield mesh
 			mc_shield.flags = MC_CHECK_SHIELD;
@@ -332,7 +340,9 @@ int ship_weapon_check_collision(object *ship_objp, object *weapon_objp, float ti
 					// do in weapons.cpp for most parts just because that is how rest of the functions are handled
 					surface_shield_impact(&mc_shield.hit_point, ship_objp, wip->surface_shield_radius, sip->surface_shield_ani);
 				} else {
-					add_shield_point(OBJ_INDEX(ship_objp), mc_shield.shield_hit_tri, &mc_shield.hit_point);
+					if (mc_shield.shield_hit_tri != -1) {
+						add_shield_point(OBJ_INDEX(ship_objp), mc_shield.shield_hit_tri, &mc_shield.hit_point);
+					}
 				}
 			else {
 				/* TODO */
@@ -390,7 +400,7 @@ int ship_weapon_check_collision(object *ship_objp, object *weapon_objp, float ti
 	if ( valid_hit_occurred )
 	{
 		wp->collisionOccured = true;
-		wp->collisionInfo = mc_info(mc);
+		memcpy(&wp->collisionInfo, &mc, sizeof(mc_info));
 
 		Script_system.SetHookObjects(4, "Ship", ship_objp, "Weapon", weapon_objp, "Self",ship_objp, "Object", weapon_objp);
 		bool ship_override = Script_system.IsConditionOverride(CHA_COLLIDEWEAPON, ship_objp);

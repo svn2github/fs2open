@@ -20,7 +20,7 @@
 #include "graphics/generic.h"
 #include "model/model.h"
 
-struct object;
+class object;
 struct ship_subsys;
 
 #define	WP_UNUSED			-1
@@ -498,10 +498,6 @@ typedef struct weapon_info {
 	float alpha_max;			// maximum alpha value to use
 	float alpha_min;			// minimum alpha value to use
 	float alpha_cycle;			// cycle between max and min by this much each frame
-
-	//WMC - scripting stuff
-	script_hook sc_collide_ship;
-	script_hook sc_collide_weapon;
 
 	int weapon_hitpoints;
 

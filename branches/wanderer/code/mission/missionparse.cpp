@@ -210,7 +210,7 @@ char Cargo_names_buf[MAX_CARGO][NAME_LENGTH];
 
 char *Ship_class_names[MAX_SHIP_CLASSES];		// to be filled in from Ship_info array
 
-char *Icon_names[MAX_BRIEF_ICONS] = {
+char *Icon_names[MIN_BRIEF_ICONS] = {
 	"Fighter", "Fighter Wing", "Cargo", "Cargo Wing", "Largeship",
 	"Largeship Wing", "Capital", "Planet", "Asteroid Field", "Waypoint",
 	"Support Ship", "Freighter(no cargo)", "Freighter(has cargo)",
@@ -1503,6 +1503,14 @@ void parse_briefing(mission *pm, int flags)
 					if ( val>0 ) {
 						bi->flags |= BI_MIRROR_ICON;
 					}	
+				}
+
+				if (optional_string("$use wing icon:"))
+				{
+					stuff_int(&val);
+					if ( val>0 ) {
+						bi->flags |= BI_USE_WING_ICON;
+					}
 				}
 
 				required_string("$multi_text");
@@ -6504,13 +6512,15 @@ int mission_did_ship_arrive(p_object *objp)
 	}
 
 	if ( should_arrive ) { 		// has the arrival criteria been met?
-		int object_num;		
+		int object_num;
 
 		// check to see if the delay field <= 0.  if so, then create a timestamp and then maybe
 		// create the object
 		if ( objp->arrival_delay <= 0 ) {
 			objp->arrival_delay = timestamp( -objp->arrival_delay * 1000 );
-			Assert( objp->arrival_delay >= 0 );
+
+			// make sure we have a valid timestamp
+			Assert( objp->arrival_delay > 0 );
 		}
 		
 		// if the timestamp hasn't elapsed, move onto the next ship.

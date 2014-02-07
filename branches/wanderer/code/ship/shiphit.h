@@ -13,9 +13,9 @@
 #define _SHIPHIT_H
 
 struct vec3d;
-struct ship;
+class ship;
 struct ship_subsys;
-struct object;
+class object;
 
 #define NO_SPARKS			0
 #define CREATE_SPARKS	1
