@@ -122,6 +122,7 @@
 #include "osapi/osapi.h"
 #include "osapi/osregistry.h"
 #include "parse/encrypt.h"
+#include "parse/generic_log.h"
 #include "parse/lua.h"
 #include "parse/parselo.h"
 #include "parse/scripting.h"
@@ -464,7 +465,7 @@ void game_do_training_checks();
 void game_shutdown(void);
 void game_show_event_debug(float frametime);
 void game_event_debug_init();
-void game_frame(int paused = false);
+void game_frame(bool paused = false);
 void demo_upsell_show_screens();
 void game_start_subspace_ambient_sound();
 void game_stop_subspace_ambient_sound();
@@ -908,6 +909,7 @@ void game_level_close()
 		ship_clear_cockpit_displays();
 		hud_level_close();
 		model_instance_free_all();
+		batch_render_close();
 
 		// be sure to not only reset the time but the lock as well
 		set_time_compression(1.0f, 0.0f);
@@ -1679,29 +1681,6 @@ DCF(gamma,"Sets Gamma factor")
 	}
 }
 
-void run_launcher()
-{
-#ifdef _WIN32
-	const char *launcher_link = "explorer.exe \"http://www.randomtiger.pwp.blueyonder.co.uk/freespace/Launcher5.rar\"";
-
-	int download = MessageBox((HWND)os_get_window(), 
-		"Run the fs2_open launcher to fix your problem. "
-		"Would you like to download the latest version of the launcher? "
-		"You must have at least version 5.0 to run fs2_open versions above 3.6.", 
-		"Question", MB_YESNO | MB_ICONQUESTION);
-
-	if(download == IDYES)
-	{
-		// Someone should change this to the offical link
-		WinExec(launcher_link, SW_SHOW);
-		return;
-	}
-
-	// This now crashes the launcher since fs2_open is still open
-	return;
-#endif
-}
-
 #ifdef APPLE_APP
 char full_path[1024];
 #endif
@@ -1849,7 +1828,6 @@ void game_init()
 		ShowCursor(TRUE);
 		ShowWindow((HWND)os_get_window(),SW_MINIMIZE);
 		MessageBox( NULL, "Error intializing graphics!", "Error", MB_OK|MB_TASKMODAL|MB_SETFOREGROUND );
-		run_launcher();
 #elif defined(SCP_UNIX)
 		fprintf(stderr, "Error initializing graphics!");
 
@@ -1970,6 +1948,10 @@ void game_init()
 
 	multi_init();	
 
+	// start up the mission logfile
+	logfile_init(LOGFILE_EVENT_LOG);
+	log_string(LOGFILE_EVENT_LOG,"FS2_Open Mission Log - Opened \n\n", 1);
+
 	// standalone's don't use the joystick and it seems to sometimes cause them to not get shutdown properly
 	if(!Is_standalone){
 		joy_init();
@@ -1979,6 +1961,12 @@ void game_init()
 	model_init();	
 
 	event_music_init();
+
+	// initialize alpha colors
+	// CommanderDJ: try with colors.tbl first, then use the old way if that doesn't work
+	if (!new_alpha_colors_init()) {
+		old_alpha_colors_init();
+	}
 
 	obj_init();	
 	mflash_game_init();	
@@ -2014,12 +2002,6 @@ void game_init()
 	pilot_load_squad_pic_list();
 
 	load_animating_pointer(NOX("cursor"), 0, 0);	
-
-	// initialize alpha colors
-	// CommanderDJ: try with colors.tbl first, then use the old way if that doesn't work
-	if (!new_alpha_colors_init()) {
-		old_alpha_colors_init();
-	}
 
 	if(!Cmdline_reparse_mainhall)
 	{
@@ -3688,7 +3670,7 @@ void game_render_frame( camid cid )
 	if(draw_viewer_last && Viewer_obj)
 	{
 		gr_post_process_save_zbuffer();
-		ship_render(Viewer_obj);
+		ship_render_show_ship_cockpit(Viewer_obj);
 	}
 
 
@@ -4329,7 +4311,7 @@ void game_render_post_frame()
 #define DEBUG_GET_TIME(x)
 #endif
 
-void game_frame(int paused)
+void game_frame(bool paused)
 {
 #ifndef NDEBUG
 	fix total_time1, total_time2;
@@ -4339,9 +4321,6 @@ void game_frame(int paused)
 	fix clear_time1=0, clear_time2=0;
 #endif
 	int actually_playing;
-
-	//vec3d eye_pos;
-	//matrix eye_orient;
 
 #ifndef NDEBUG
 	if (Framerate_delay) {
@@ -4501,6 +4480,10 @@ void game_frame(int paused)
 					}
 				}
 			}
+
+			// Goober5000 - check if we should red-alert
+			// (this is approximately where the red_alert_check_status() function tree began in the pre-HUD-overhaul code)
+			red_alert_maybe_move_to_next_mission();
 
 			DEBUG_GET_TIME( render3_time2 )
 			DEBUG_GET_TIME( render2_time1 )
@@ -6158,7 +6141,9 @@ void game_enter_state( int old_state, int new_state )
 			//Set the current hud
 			set_current_hud();
 
-			ship_init_cockpit_displays(Player_ship);
+			if ( !Is_standalone ) {
+				ship_init_cockpit_displays(Player_ship);
+			}
 
 			Game_mode |= GM_IN_MISSION;
 
@@ -7339,11 +7324,17 @@ void game_shutdown(void)
 	mission_parse_close();		// clear out any extra memory that may be in use by mission parsing
 	multi_voice_close();			// close down multiplayer voice (including freeing buffers, etc)
 	multi_log_close();
+	logfile_close(LOGFILE_EVENT_LOG); // close down the mission log
 #ifdef MULTI_USE_LAG
 	multi_lag_close();
 #endif
 	fs2netd_close();
-	obj_pairs_close();		// free memory from object collision pairs
+
+	if ( Cmdline_old_collision_sys ) {
+		obj_pairs_close();		// free memory from object collision pairs
+	} else {
+		obj_reset_colliders();
+	}
 	stars_close();			// clean out anything used by stars code
 
 	// the menu close functions will unload the bitmaps if they were displayed during the game

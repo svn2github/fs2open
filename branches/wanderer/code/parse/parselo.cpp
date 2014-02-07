@@ -519,7 +519,7 @@ int check_for_eoln()
 
 // similar to optional_string, but just checks if next token is a match.
 // It doesn't advance Mp except to skip past white space.
-int check_for_string(char *pstr)
+int check_for_string(const char *pstr)
 {
 	ignore_white_space();
 
@@ -530,11 +530,10 @@ int check_for_string(char *pstr)
 }
 
 // like check for string, but doesn't skip past any whitespace
-int check_for_string_raw(char *pstr)
+int check_for_string_raw(const char *pstr)
 {
-	if (!strnicmp(pstr, Mp, strlen(pstr))){
+	if (!strnicmp(pstr, Mp, strlen(pstr)))
 		return 1;
-	}
 
 	return 0;
 }
@@ -2558,7 +2557,7 @@ int stuff_string_list(SCP_vector<SCP_string>& slp)
 
 	ignore_white_space();
 
-	char buf[NAME_LENGTH];
+	SCP_string buf;
 
 	while (*Mp != ')') {
 		if(*Mp != '\"') {
@@ -2566,8 +2565,9 @@ int stuff_string_list(SCP_vector<SCP_string>& slp)
 		}
 		//Assert ( *Mp == '\"' );					// should always be enclosed in quotes
 
+		buf = "";
 		get_string( buf );
-		slp.push_back(SCP_string(buf));
+		slp.push_back( buf );
 		ignore_white_space();
 	}
 
@@ -3525,16 +3525,16 @@ char *stristr(const char *str, const char *substr)
 	char substr_ch_upper = (char)toupper(*substr);
 
 	// find the maximum distance to search
-	char *upper_bound = (char *)str + strlen(str) - strlen(substr);
+	const char *upper_bound = str + strlen(str) - strlen(substr);
 
 	// loop through every character of str
-	for (char *start = (char *)str; start <= upper_bound; start++)
+	for (const char *start = str; start <= upper_bound; start++)
 	{
 		// check first character of substr
 		if ((*start == substr_ch_upper) || (*start == substr_ch_lower))
 		{
 			// first character matched, so check the rest
-			for (char *str_ch = start+1, *substr_ch = (char *)substr+1; *substr_ch != '\0'; str_ch++, substr_ch++)
+			for (const char *str_ch = start+1, *substr_ch = substr+1; *substr_ch != '\0'; str_ch++, substr_ch++)
 			{
 				// character match?
 				if (*str_ch == *substr_ch)
@@ -3549,7 +3549,7 @@ char *stristr(const char *str, const char *substr)
 			}
 
 			// finished inner loop with success!
-			return start;
+			return const_cast<char*>(start);
 		}
 
 stristr_continue_outer_loop:

@@ -65,6 +65,7 @@ static char THIS_FILE[] = __FILE__;
 #define	MAX_FRAMETIME	(F1_0/4)		// Frametime gets saturated at this.
 #define	MIN_FRAMETIME	(F1_0/120)
 #define	LOLLIPOP_SIZE	2.5f
+#define CONVERT_DEGREES 57.29578f		// conversion factor from radians to degrees
 
 const float FRED_DEFAULT_HTL_FOV = 0.485f;
 const float FRED_BRIEFING_HTL_FOV = 0.325f;
@@ -139,8 +140,8 @@ color colour_yellow;
 
 void fred_enable_htl()
 {
-	if (!Briefing_dialog) gr_set_proj_matrix( (4.0f/9.0f) * 3.14159f * FRED_DEFAULT_HTL_FOV,  gr_screen.aspect*(float)gr_screen.clip_width/(float)gr_screen.clip_height, 1.0f, FRED_DEAFULT_HTL_DRAW_DIST);
-	if (Briefing_dialog) gr_set_proj_matrix( (4.0f/9.0f) * 3.14159f * FRED_BRIEFING_HTL_FOV,  gr_screen.aspect*(float)gr_screen.clip_width/(float)gr_screen.clip_height, 1.0f, FRED_DEAFULT_HTL_DRAW_DIST);
+	if (!Briefing_dialog) gr_set_proj_matrix( (4.0f/9.0f) * PI * FRED_DEFAULT_HTL_FOV,  gr_screen.aspect*(float)gr_screen.clip_width/(float)gr_screen.clip_height, 1.0f, FRED_DEAFULT_HTL_DRAW_DIST);
+	if (Briefing_dialog) gr_set_proj_matrix( (4.0f/9.0f) * PI * FRED_BRIEFING_HTL_FOV,  gr_screen.aspect*(float)gr_screen.clip_width/(float)gr_screen.clip_height, 1.0f, FRED_DEAFULT_HTL_DRAW_DIST);
 	gr_set_view_matrix(&Eye_position, &Eye_matrix);
 }
 
@@ -734,7 +735,7 @@ void render_one_model_nohtl(object *objp)
 		Fred_outline = FRED_COLOUR_YELLOW;
 
 	else if ((objp->type == OBJ_SHIP) && Show_outlines) {
-		color *iff_color = iff_get_color_by_team_and_object(Ships[objp->instance].team, -1, true, objp);
+		color *iff_color = iff_get_color_by_team_and_object(Ships[objp->instance].team, -1, 1, objp);
 
 		Fred_outline = (iff_color->red << 16) | (iff_color->green << 8) | (iff_color->blue);
 
@@ -782,7 +783,7 @@ void render_one_model_nohtl(object *objp)
 			if (!Show_ships)
 				return;
 
-			color *iff_color = iff_get_color_by_team_and_object(Ships[objp->instance].team, -1, true, objp);
+			color *iff_color = iff_get_color_by_team_and_object(Ships[objp->instance].team, -1, 1, objp);
 
 			r = iff_color->red;
 			g = iff_color->green;
@@ -863,7 +864,7 @@ void render_one_model_htl(object *objp)
 		Fred_outline = FRED_COLOUR_YELLOW;
 
 	else if ((objp->type == OBJ_SHIP) && Show_outlines) {
-		color *iff_color = iff_get_color_by_team_and_object(Ships[objp->instance].team, -1, true, objp);
+		color *iff_color = iff_get_color_by_team_and_object(Ships[objp->instance].team, -1, 1, objp);
 
 		Fred_outline = (iff_color->red << 16) | (iff_color->green << 8) | (iff_color->blue);
 
@@ -919,7 +920,7 @@ void render_one_model_htl(object *objp)
 				return;
 			}
 
-			color *iff_color = iff_get_color_by_team_and_object(Ships[objp->instance].team, -1, true, objp);
+			color *iff_color = iff_get_color_by_team_and_object(Ships[objp->instance].team, -1, 1, objp);
 
 			r = iff_color->red;
 			g = iff_color->green;
@@ -1447,7 +1448,7 @@ void render_frame()
 	int x, y, w, h, inst;
 	vec3d pos;
 	vertex v;
-	angles a;
+	angles a, a_deg;  //a is in rads, a_deg is in degrees
 
 	g3_end_frame();	 // ** Accounted for
 
@@ -1530,9 +1531,14 @@ void render_frame()
 		inst = Objects[Cursor_over].instance;
 		if ((Objects[Cursor_over].type == OBJ_SHIP) || (Objects[Cursor_over].type == OBJ_START)) {
 			vm_extract_angles_matrix(&a, &Objects[Cursor_over].orient);
+
+			a_deg.h = a.h * CONVERT_DEGREES; // convert angles to more readable degrees
+			a_deg.p = a.p * CONVERT_DEGREES;
+			a_deg.b = a.b * CONVERT_DEGREES;
+
 			sprintf(buf, "%s\n%s\n( %.1f , %.1f , %.1f ) \nHeading: %.2f\nPitch: %.2f\nBank: %.2f",
 				Ships[inst].ship_name, Ship_info[Ships[inst].ship_info_index].short_name,
-				pos.xyz.x, pos.xyz.y, pos.xyz.z, a.h, a.p, a.b);
+				pos.xyz.x, pos.xyz.y, pos.xyz.z, a_deg.h, a_deg.p, a_deg.b);
 
 		} else if (Objects[Cursor_over].type == OBJ_WAYPOINT) {
 			int idx;

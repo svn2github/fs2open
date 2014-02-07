@@ -2507,6 +2507,11 @@ void HudGaugeSquadMessage::initMiddleFrameStartOffsetY(int y)
 	Middle_frame_start_offset_y = y;
 }
 
+void HudGaugeSquadMessage::initBottomBgOffset(int offset)
+{
+	bottom_bg_offset = offset;
+}
+
 void HudGaugeSquadMessage::initItemHeight(int h)
 {
 	Item_h = h;
@@ -2592,7 +2597,7 @@ bool HudGaugeSquadMessage::canRender()
 		return false;
 	}
 
-	if (!( Players->flags & PLAYER_FLAGS_MSG_MODE )) {
+	if (!( Player->flags & PLAYER_FLAGS_MSG_MODE )) {
 		return false;
 	}
 
@@ -2707,7 +2712,7 @@ void HudGaugeSquadMessage::render(float frametime)
 	setGaugeColor();
 	if ( Mbox_gauge[2].first_frame >= 0 ) {
 	
-		renderBitmap(Mbox_gauge[2].first_frame, bx, by);
+		renderBitmap(Mbox_gauge[2].first_frame, bx, by + bottom_bg_offset);
 	}
 
 	// determine if we should put the text "[more]" at top or bottom to indicate you can page up or down
@@ -2724,7 +2729,7 @@ void HudGaugeSquadMessage::render(float frametime)
 	if ( messaging_allowed ) {
 		if ( none_valid ){
 			renderPrintf( sx, by - Item_h + 2, XSTR( "No valid items", 314));
-		} else if ( !none_valid && (Msg_shortcut_command != -1) ){
+		} else if (Msg_shortcut_command != -1){
 			renderPrintf( sx, by - Item_h + 2, "%s", comm_order_get_text(Msg_shortcut_command));
 		}
 	} else {

@@ -32,6 +32,7 @@
 #include "ai/aigoals.h"
 #include "gamesnd/gamesnd.h"
 #include "mission/missionmessage.h"
+#include "mission/missionparse.h"
 #include "cmeasure/cmeasure.h"
 #include "math/staticrand.h"
 #include "ship/afterburner.h"
@@ -193,6 +194,11 @@ int Num_alloced_ai_classes;
 int	AI_FrameCount = 0;
 int	AI_watch_object = 0; // Debugging, object to spew debug info for.
 int	Mission_all_attack = 0;					//	!0 means all teams attack all teams.
+
+//	Constant for flag,				Name of flag,				In flags or flags2
+ai_flag_name Ai_flag_names[] = {
+	{AIF_NO_DYNAMIC,				"no-dynamic",					1,	},
+};
 
 char *Skill_level_names(int level, int translate)
 {
@@ -1828,28 +1834,7 @@ int is_ignore_object(ai_info *aip, int objnum, int just_the_original = 0)
 	return 0;
 }
 
-/**
- * Given a ship with bounding box and a point, find the closest point on the bbox
- */
-int get_nearest_bbox_point(object *ship_obj, vec3d *start, vec3d *box_pt)
-{
-	vec3d temp, rf_start;
-	polymodel *pm;
-	pm = model_get(Ship_info[Ships[ship_obj->instance].ship_info_index].model_num);
 
-	// get start in ship rf
-	vm_vec_sub(&temp, start, &ship_obj->pos);
-	vm_vec_rotate(&rf_start, &temp, &ship_obj->orient);
-
-	// find box_pt
-	int inside = project_point_onto_bbox(&pm->mins, &pm->maxs, &rf_start, &temp);
-
-	// get box_pt in world rf
-	vm_vec_unrotate(box_pt, &temp, &ship_obj->orient);
-	vm_vec_add2(box_pt, &ship_obj->pos);
-
-	return inside;
-}
 
 
 typedef struct eval_nearest_objnum {
@@ -4836,7 +4821,7 @@ void evade_weapon()
 			rdot = vm_vec_dot(&Pl_objp->orient.vec.rvec, &vec_from_enemy);
 			udot = vm_vec_dot(&Pl_objp->orient.vec.uvec, &vec_from_enemy);
 
-			if (aip->ai_profile_flags & AIPF_ALLOW_VERTICAL_DODGE && abs(udot) > abs(rdot))
+			if (aip->ai_profile_flags & AIPF_ALLOW_VERTICAL_DODGE && fl_abs(udot) > fl_abs(rdot))
 			{
 				if ((udot < -0.5f) || (udot > 0.5f))
 					vm_vec_scale_add(&goal_point, &Pl_objp->pos, &Pl_objp->orient.vec.uvec, -200.0f);
@@ -5396,7 +5381,7 @@ void set_primary_weapon_linkage(object *objp)
 	}
 
 	//	Don't want all ships always linking weapons at start, so asynchronize.
-	if (The_mission.ai_profile->flags2 & AIPF2_ALLOW_PRIMARY_LINK_DELAY)
+	if (!(The_mission.ai_profile->flags2 & AIPF2_ALLOW_PRIMARY_LINK_AT_START))
 	{
 		if (Missiontime < i2f(30))
 			return;
@@ -7360,9 +7345,9 @@ void ai_set_guard_object(object *objp, object *other_objp)
 	aip = &Ai_info[shipp->ai_index];
 	aip->avoid_check_timestamp = timestamp(1);
 
-	//	If ship to guard is in a wing, guard that whole wing.
+	//	If ship to guard is in a wing, guard that whole wing, unless the appropriate flag has been set
 	ai_info	*other_aip = &Ai_info[Ships[other_objp->instance].ai_index];
-	if ((other_aip->wing != -1) && (other_aip->wing != aip->wing)) {
+	if ((other_aip->wing != -1) && (other_aip->wing != aip->wing) && !(The_mission.ai_profile->flags2 & AIPF2_AI_GUARDS_SPECIFIC_SHIP_IN_WING)) {
 		ai_set_guard_wing(objp, Ai_info[Ships[other_objp->instance].ai_index].wing);
 	} else {
 
@@ -8064,7 +8049,7 @@ void ai_chase()
 	}
 
 	// Can only acquire lock on a target that isn't hidden from sensors
-	if ( !(Ships[En_objp->instance].flags & SF_HIDDEN_FROM_SENSORS) && !is_stealthy_ship ) {
+	if ( En_objp->type == OBJ_SHIP && !(Ships[En_objp->instance].flags & SF_HIDDEN_FROM_SENSORS) && !is_stealthy_ship ) {
 		update_aspect_lock_information(aip, &real_vec_to_enemy, dist_to_enemy, En_objp->radius);
 	} else {
 		aip->current_target_is_locked = 0;
@@ -9155,7 +9140,7 @@ int num_ships_attacking(int target_objnum)
 	ai_info	*attacking_aip;
 	ship_obj	*so;
 	int		count = 0;
-	int target_team = Ships[Objects[target_objnum].instance].team;
+	int target_team = obj_team(&Objects[target_objnum]);
 
 	for ( so = GET_FIRST(&Ship_obj_list); so != END_OF_LIST(&Ship_obj_list); so = GET_NEXT(so) )
 	{
@@ -9166,7 +9151,6 @@ int num_ships_attacking(int target_objnum)
 		attacking_aip = &Ai_info[Ships[attacking_objp->instance].ai_index];
 
 		// don't count instructor
-		int is_training_mission();
 		if (is_training_mission() && is_instructor(attacking_objp))
 			continue;	// Goober5000 10/06/2005 changed from break
 
@@ -10883,8 +10867,8 @@ void process_subobjects(int objnum)
 	for ( pss = GET_FIRST(&shipp->subsys_list); pss !=END_OF_LIST(&shipp->subsys_list); pss = GET_NEXT(pss) ) {
 		psub = pss->system_info;
 
-		// Don't process destroyed objects (but allow subobjects with hitpoints disabled -nuke)
-		if (pss->max_hits > 0 && pss->current_hits <= 0.0f ) 
+		// Don't process destroyed objects (but allow subobjects with hitpoints disabled -nuke) (but also process subobjects that are allowed to rotate)
+		if (pss->max_hits > 0 && pss->current_hits <= 0.0f && !(psub->flags2 & MSS_FLAG2_DESTROYED_ROTATION))
 			continue;
 
 		switch (psub->type) {
@@ -11480,6 +11464,14 @@ int ai_formation()
 	}
 	
 	if (aip->mode == AIM_WAYPOINTS) {
+
+		if (The_mission.ai_profile->flags2 & AIPF2_FIX_AI_PATH_ORDER_BUG){
+			// skip if wing leader has no waypoint order or a different waypoint list
+			if ((laip->mode != AIM_WAYPOINTS) || !(aip->wp_list == laip->wp_list)){
+				return 1;
+			}
+		}
+
 		aip->wp_list = laip->wp_list;
 		aip->wp_index = laip->wp_index;
 		aip->wp_flags = laip->wp_flags;
@@ -11811,7 +11803,10 @@ void ai_preprocess_ignore_objnum(object *objp, ai_info *aip)
 
 	if (is_ignore_object(aip, aip->goal_objnum))
 	{
-		aip->goal_objnum = -1;
+		// you can land and launch on a ship you're ignoring!
+		if (aip->mode != AIM_BAY_EMERGE && aip->mode != AIM_BAY_DEPART) {
+			aip->goal_objnum = -1;
+		}
 
 		// AL 12-11-97: If in STRAFE mode, we need to ensure that target_objnum is also
 		//              set to -1

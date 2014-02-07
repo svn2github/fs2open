@@ -828,9 +828,10 @@ void process_debug_keys(int k)
 					object	*objp;
 
 					for ( objp = GET_FIRST(&obj_used_list); objp !=END_OF_LIST(&obj_used_list); objp = GET_NEXT(objp) )
-						if (objp->type == OBJ_SHIP)
+						if (objp->type == OBJ_SHIP) {
 							debug_max_secondary_weapons(objp);
 							debug_max_primary_weapons(objp);
+						}
 				}
 
 			} else
@@ -2039,6 +2040,9 @@ int button_function_demo_valid(int n)
 int button_function(int n)
 {
 	Assert(n >= 0);
+
+	if (Control_config[n].disabled)
+		return 0;
 
 	// check if the button has been set to be ignored by a SEXP
 	if (Ignored_keys[n]) {

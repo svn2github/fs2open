@@ -57,6 +57,8 @@ int model_render_flags_size = sizeof(model_render_flags)/sizeof(flag_def_list);
 polymodel *Polygon_models[MAX_POLYGON_MODELS];
 SCP_vector<polymodel_instance*> Polygon_model_instances;
 
+SCP_vector<bsp_collision_tree> Bsp_collision_tree_list;
+
 static int model_initted = 0;
 extern int Cmdline_nohtl;
 
@@ -231,6 +233,10 @@ void model_unload(int modelnum, int force)
 			if ( pm->submodel[i].bsp_data )	{
 				vm_free(pm->submodel[i].bsp_data);
 			}
+
+			if ( pm->submodel[i].collision_tree_index >= 0 ) {
+				model_remove_bsp_collision_tree(pm->submodel[i].collision_tree_index);
+			}
 		}
 
 		vm_free(pm->submodel);
@@ -260,6 +266,10 @@ void model_unload(int modelnum, int force)
 	for (i = 0; i < Num_ship_classes; i++) {
 		if ( pm->id == Ship_info[i].model_num ) {
 			Ship_info[i].model_num = -1;
+		}
+
+		if ( pm->id == Ship_info[i].cockpit_model_num ) {
+			Ship_info[i].cockpit_model_num = -1;
 		}
 
 		if ( pm->id == Ship_info[i].model_num_hud ) {
@@ -1676,8 +1686,8 @@ int read_model_file(polymodel * pm, char *filename, int n_subsystems, model_subs
 						if ( (p = strstr(props, "$name"))!= NULL ) {
 							get_user_prop_value(p+5, bay->name);
 
-							int len = strlen(bay->name);
-							if ((len > 0) && is_white_space(bay->name[len-1])) {
+							int length = strlen(bay->name);
+							if ((length > 0) && is_white_space(bay->name[length-1])) {
 								nprintf(("Model", "model '%s' has trailing whitespace on bay name '%s'; this will be trimmed\n", pm->filename, bay->name));
 								drop_trailing_white_space(bay->name);
 							}
@@ -1713,6 +1723,29 @@ int read_model_file(polymodel * pm, char *filename, int n_subsystems, model_subs
 						for (j = 0; j < bay->num_slots; j++) {
 							cfread_vector( &(bay->pnt[j]), fp );
 							cfread_vector( &(bay->norm[j]), fp );
+						}
+
+						if(vm_vec_same(&bay->pnt[0], &bay->pnt[1])) {
+							Warning(LOCATION, "Model '%s' has two identical docking slot positions on docking port '%s'. This is not allowed.  A new second slot position will be generated.", filename, bay->name);
+
+							// just move the second point over by some amount
+							bay->pnt[1].xyz.z += 10.0f;
+						}
+
+						vec3d diff;
+						vm_vec_normalized_dir(&diff, &bay->pnt[0], &bay->pnt[1]);
+						float dot = vm_vec_dotprod(&diff, &bay->norm[0]);
+						if(fl_abs(dot) > 0.99f) {
+							Warning(LOCATION, "Model '%s', docking port '%s' has docking slot positions that lie on the same axis as the docking normal.  This will cause a NULL VEC crash when docked to another ship.  A new docking normal will be generated.", filename, bay->name);
+
+							// generate a simple rotation matrix in all three dimensions (though bank is probably not needed)
+							angles a = { PI_2, PI_2, PI_2 };
+							matrix m;
+							vm_angles_2_matrix(&m, &a);
+
+							// rotate the docking normal
+							vec3d temp = bay->norm[0];
+							vm_vec_rotate(&bay->norm[0], &temp, &m);
 						}
 					}
 				}
@@ -2277,7 +2310,7 @@ void model_load_texture(polymodel *pm, int i, char *file)
 	else
 	{
 		// check if we should be transparent, include "-trans" but make sure to skip anything that might be "-transport"
-		if ( (strstr(tmp_name, "-trans") && !strstr(tmp_name, "-transpo")) || strstr(tmp_name, "shockwave") ) {
+		if ( (strstr(tmp_name, "-trans") && !strstr(tmp_name, "-transpo")) || strstr(tmp_name, "shockwave") || strstr(tmp_name, "nameplate") ) {
 			tmap->is_transparent = true;
 		}
 
@@ -2620,6 +2653,15 @@ int model_load(char *filename, int n_subsystems, model_subsystem *subsystems, in
 
 
 	model_octant_create( pm );
+
+	if ( !Cmdline_old_collision_sys ) {
+		for ( i = 0; i < pm->n_models; ++i ) {
+			pm->submodel[i].collision_tree_index = model_create_bsp_collision_tree();
+			bsp_collision_tree *tree = model_get_bsp_collision_tree(pm->submodel[i].collision_tree_index);
+
+			model_collide_parse_bsp(tree, pm->submodel[i].bsp_data, pm->version);
+		}
+	}
 
 	// Find the core_radius... the minimum of 
 	float rx, ry, rz;
@@ -4072,13 +4114,17 @@ void model_get_rotating_submodel_list(SCP_vector<int> *submodel_vector, object *
 	bsp_info *child_submodel;
 	
 	child_submodel = &pm->submodel[pm->detail[0]];
+	
+	if(child_submodel->no_collisions) { // if detail0 has $no_collision set dont check childs
+		return;
+	}
 
 	int i = child_submodel->first_child;
 	while ( i >= 0 )	{
 		child_submodel = &pm->submodel[i];
 
 		// Don't check it or its children if it is destroyed or it is a replacement (non-moving)
-		if ( !child_submodel->blown_off && (child_submodel->i_replace == -1) )	{
+		if ( !child_submodel->blown_off && (child_submodel->i_replace == -1) && !child_submodel->no_collisions && !child_submodel->nocollide_this_only)	{
 
 			// Only look for submodels that rotate
 			if (child_submodel->movement_type == MOVEMENT_TYPE_ROT) {
@@ -4705,6 +4751,62 @@ int model_find_bay_path(int modelnum, char *bay_path_name)
 	}
 
 	return -1;
+}
+
+int model_create_bsp_collision_tree()
+{
+	// first find an open slot
+	size_t i;
+	bool slot_found = false;
+
+	for ( i = 0; i < Bsp_collision_tree_list.size(); ++i ) {
+		if ( !Bsp_collision_tree_list[i].used ) {
+			slot_found = true;
+			break;
+		}
+	}
+
+	if ( slot_found ) {
+		Bsp_collision_tree_list[i].used = true;
+
+		return (int)i;
+	}
+
+	bsp_collision_tree tree;
+
+	tree.used = true;
+	Bsp_collision_tree_list.push_back(tree);
+
+	return Bsp_collision_tree_list.size() - 1;
+}
+
+bsp_collision_tree *model_get_bsp_collision_tree(int tree_index)
+{
+	Assert(tree_index >= 0);
+	Assert((uint) tree_index < Bsp_collision_tree_list.size());
+
+	return &Bsp_collision_tree_list[tree_index];
+}
+
+void model_remove_bsp_collision_tree(int tree_index)
+{
+	Bsp_collision_tree_list[tree_index].used = false;
+
+	if ( Bsp_collision_tree_list[tree_index].node_list ) {
+		vm_free(Bsp_collision_tree_list[tree_index].node_list);
+	}
+
+	if ( Bsp_collision_tree_list[tree_index].leaf_list ) {
+		vm_free(Bsp_collision_tree_list[tree_index].leaf_list);
+	}
+	
+	if ( Bsp_collision_tree_list[tree_index].point_list ) {
+		vm_free( Bsp_collision_tree_list[tree_index].point_list );
+	}
+	
+	if ( Bsp_collision_tree_list[tree_index].vert_list ) {
+		vm_free( Bsp_collision_tree_list[tree_index].vert_list);
+	}
 }
 
 #if BYTE_ORDER == BIG_ENDIAN

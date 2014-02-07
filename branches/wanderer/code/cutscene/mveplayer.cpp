@@ -305,7 +305,7 @@ void mve_audio_play()
 // call this in shutdown to stop and close audio
 static void mve_audio_stop()
 {
-	if (!audiobuf_created) {
+	if (!audiobuf_created || mas == NULL) {
 		return;
 	}
 
@@ -516,11 +516,14 @@ int mve_video_createbuf(ubyte minor, ubyte *data)
 		glVertices[3][2] = gl_screenU;
 		glVertices[3][3] = gl_screenV;
 
-		glVertexPointer(2, GL_FLOAT, sizeof(glVertices[0]), glVertices);
-		glTexCoordPointer(2, GL_FLOAT, sizeof(glVertices[0]), &(glVertices[0][2]));
+		GL_state.Array.BindArrayBuffer(0);
 
-		glEnableClientState(GL_VERTEX_ARRAY);
-		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+		GL_state.Array.EnableClientVertex();
+		GL_state.Array.VertexPointer(2, GL_FLOAT, sizeof(glVertices[0]), glVertices);
+
+		GL_state.Array.SetActiveClientUnit(0);
+		GL_state.Array.EnableClientTexture();
+		GL_state.Array.TexPointer(2, GL_FLOAT, sizeof(glVertices[0]), &(glVertices[0][2]));
 	}
 
 	return 1;
@@ -697,7 +700,7 @@ int mve_video_init(ubyte *data)
 		glTexImage2D(GL_state.Texture.GetTarget(), 0, GL_RGB5_A1, wp2, hp2, 0, GL_BGRA_EXT, GL_UNSIGNED_SHORT_1_5_5_5_REV, NULL);
 
 		// set our color so that we can make sure that it's correct
-		glColor3f(1.0f, 1.0f, 1.0f);
+		GL_state.Color(255, 255, 255, 255);
 	}
 
 	memset(g_palette, 0, 768);
@@ -794,8 +797,8 @@ void mve_play(MVESTREAM *mve)
 void mve_shutdown()
 {
 	if (gr_screen.mode == GR_OPENGL) {
-		glDisableClientState(GL_VERTEX_ARRAY);
-		glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+		GL_state.Array.DisableClientVertex();
+		GL_state.Array.DisableClientTexture();
 
 		if (mve_scale_video) {
 			glMatrixMode(GL_MODELVIEW);

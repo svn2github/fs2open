@@ -13,6 +13,7 @@
 #include <setjmp.h>
 
 #include "globalincs/def_files.h"
+#include "globalincs/alphacolors.h"
 #include "ship/ship.h"
 #include "object/object.h"
 #include "weapon/weapon.h"
@@ -60,6 +61,7 @@
 #include "ship/shipcontrails.h"
 #include "weapon/beam.h"
 #include "math/staticrand.h"
+#include "math/fvi.h"
 #include "missionui/missionshipchoice.h"
 #include "hud/hudartillery.h"
 #include "species_defs/species_defs.h"
@@ -77,6 +79,7 @@
 #include "parse/scripting.h"
 #include "graphics/gropenglshader.h"
 #include "model/model.h"
+#include "mod_table/mod_table.h"
 
 
 #define NUM_SHIP_SUBSYSTEM_SETS			20		// number of subobject sets to use (because of the fact that it's a linked list,
@@ -249,7 +252,8 @@ flag_def_list Subsystem_flags[] = {
 	{ "play fire sound for player", MSS_FLAG2_PLAYER_TURRET_SOUND, 1},
 	{ "only target if can fire",    MSS_FLAG2_TURRET_ONLY_TARGET_IF_CAN_FIRE, 1},
 	{ "no disappear",			MSS_FLAG2_NO_DISAPPEAR, 1},
-	{ "collide submodel",		MSS_FLAG2_COLLIDE_SUBMODEL, 1}
+	{ "collide submodel",		MSS_FLAG2_COLLIDE_SUBMODEL, 1},
+	{ "allow destroyed rotation",	MSS_FLAG2_DESTROYED_ROTATION, 1}
 };
 
 const int Num_subsystem_flags = sizeof(Subsystem_flags)/sizeof(flag_def_list);
@@ -353,6 +357,22 @@ flag_def_list ai_tgt_weapon_flags[] = {
 	{ "capital+",			WIF2_CAPITAL_PLUS,		1 }
 };
 
+//	Constant for flag,				Name of flag,				In flags or flags2
+ship_flag_name Ship_flag_names[] = {
+	{SF_VAPORIZE,					"vaporize",						1,	},
+	{SF_WARP_BROKEN,				"break-warp",					1,	},
+	{SF_WARP_NEVER,					"never-warp",					1,	},
+	//{SF_HIDDEN_FROM_SENSORS,		"hidden-from-sensors",			1,	},
+	//{SF2_STEALTH,					"stealth",						2,	},
+	//{SF2_FRIENDLY_STEALTH_INVIS,	"friendly-stealth-invisible",	2,	},
+	{SF2_AFTERBURNER_LOCKED,		"afterburners-locked",			2,	},
+	{SF2_PRIMARIES_LOCKED,			"primaries-locked",				2,	},
+	{SF2_SECONDARIES_LOCKED,		"secondaries-locked",			2,	},
+	{SF2_NO_SUBSPACE_DRIVE,			"no-subspace-drive",			2,	},
+	{SF2_DONT_COLLIDE_INVIS,		"don't-collide-invisible",		2,	},
+	{SF2_NO_ETS,					"no-ets",						2,	},
+};
+
 const int num_ai_tgt_weapon_flags = sizeof(ai_tgt_weapon_flags) / sizeof(flag_def_list);
 
 SCP_vector <ai_target_priority> Ai_tp_list;
@@ -372,9 +392,6 @@ static int Thrust_anim_inited = 0;
 bool warning_too_many_ship_classes = false;
 
 int ship_get_subobj_model_num(ship_info* sip, char* subobj_name);
-
-// Used to set the default effect for real time ship select anis, defaults to the FS2 effect
-int Default_ship_select_effect = 2;
 
 SCP_vector<ship_effect> Ship_effects;
 
@@ -943,6 +960,7 @@ void init_ship_entry(ship_info *sip)
 	sip->model_num_hud = -1;
 
 	sip->radar_image_2d_idx = -1;
+	sip->radar_color_image_2d_idx = -1;
 	sip->radar_image_size = -1;
 	sip->radar_projection_size_mult = 1.0f;
 
@@ -968,6 +986,9 @@ void init_ship_entry(ship_info *sip)
 	sip->pathMetadata.clear();
 
 	sip->selection_effect = Default_ship_select_effect;
+
+	// Team colors
+	sip->uses_team_colors = false;
 }
 
 /**
@@ -1452,9 +1473,9 @@ int parse_ship_values(ship_info* sip, bool isTemplate, bool first_time, bool rep
 		stuff_string(effect, F_NAME, NAME_LENGTH);
 		if (!stricmp(effect, "FS2"))
 			sip->selection_effect = 2;
-		if (!stricmp(effect, "FS1"))
+		else if (!stricmp(effect, "FS1"))
 			sip->selection_effect = 1;
-		if (!stricmp(effect, "off"))
+		else if (!stricmp(effect, "off"))
 			sip->selection_effect = 0;
 	}
 
@@ -1628,6 +1649,27 @@ int parse_ship_values(ship_info* sip, bool isTemplate, bool first_time, bool rep
 			sip->nondark_colors[sip->num_nondark_colors][0] = nr;
 			sip->nondark_colors[sip->num_nondark_colors][1] = ng;
 			sip->nondark_colors[sip->num_nondark_colors++][2] = nb;
+		}
+	}
+
+	if (optional_string("$Enable Team Colors:")) {
+		stuff_boolean(&sip->uses_team_colors);
+		sip->default_team_name = "None";
+	} 
+
+	if (optional_string("$Default Team:")) {
+		char temp[NAME_LENGTH];
+		stuff_string(temp, F_NAME, NAME_LENGTH);
+		SCP_string name = temp;
+		if (name == "None") {
+			sip->uses_team_colors = true;
+		} else {
+			if (Team_Colors.find(name) != Team_Colors.end()) {
+				sip->default_team_name = name;
+				sip->uses_team_colors = true;
+			} else {
+				Warning(LOCATION, "Team name %s is invalid. Teams must be defined in colors.tbl.\n", temp);
+			}
 		}
 	}
 
@@ -3117,6 +3159,11 @@ int parse_ship_values(ship_info* sip, bool isTemplate, bool first_time, bool rep
 	{
 		stuff_string(name_tmp, F_NAME, NAME_LENGTH);
 		sip->radar_image_2d_idx = bm_load(name_tmp);
+
+		if ( optional_string("$Radar Color Image 2D:") ) {
+			stuff_string(name_tmp, F_NAME, NAME_LENGTH);
+			sip->radar_color_image_2d_idx = bm_load(name_tmp);
+		}
 
 		if (optional_string("$Radar Image Size:"))
 			stuff_int(&sip->radar_image_size);
@@ -5141,6 +5188,12 @@ void ship_set(int ship_index, int objnum, int ship_type)
 
 	// Reset special explosion too.
 	shipp->use_special_explosion = false;
+
+	// Team colors
+	shipp->team_name.assign( sip->default_team_name);
+	shipp->secondary_team_name = "<none>";
+	shipp->team_change_time = 0;
+	shipp->team_change_timestamp = 0;
 }
 
 /**
@@ -5762,7 +5815,6 @@ void ship_render(object * obj)
 	ship *shipp = &Ships[num];
 	ship *warp_shipp = NULL;
 	ship_info *sip = &Ship_info[Ships[num].ship_info_index];
-	bool reset_proj_when_done = false;
 	bool is_first_stage_arrival = false;
 	bool show_thrusters = (shipp->flags2 & SF2_NO_THRUSTERS) == 0;
 	dock_function_info dfi;
@@ -5818,20 +5870,9 @@ void ship_render(object * obj)
 			}
 		}		
 
-		if (!(sip->flags2 & SIF2_SHOW_SHIP_MODEL) && !(Viewer_mode & VM_TOPDOWN))
+		if (!(Viewer_mode & VM_TOPDOWN))
 		{
 			return;
-		}
-
-		//For in-ship cockpits. This is admittedly something of a hack
-		if (!Cmdline_nohtl) {
-			reset_proj_when_done = true;
-
-			gr_end_view_matrix();
-			gr_end_proj_matrix();
-
-			gr_set_proj_matrix(Proj_fov, gr_screen.clip_aspect, 0.05f, Max_draw_distance);
-			gr_set_view_matrix(&Eye_position, &Eye_matrix);
 		}
 	}
 
@@ -6144,6 +6185,10 @@ void ship_render(object * obj)
 				}
 			}
 
+			if (sip->uses_team_colors) {
+				gr_set_team_color(shipp->team_name, shipp->secondary_team_name, shipp->team_change_timestamp, shipp->team_change_time);
+			}
+
 			if(sip->flags2 & SIF2_NO_LIGHTING)
 				render_flags |= MR_NO_LIGHTING;
 
@@ -6283,14 +6328,6 @@ void ship_render(object * obj)
 			}
 		}
 	#endif
-
-		if (!Cmdline_nohtl && reset_proj_when_done) {
-			gr_end_view_matrix();
-			gr_end_proj_matrix();
-
-			gr_set_proj_matrix(Proj_fov, gr_screen.clip_aspect, Min_draw_distance, Max_draw_distance);
-			gr_set_view_matrix(&Eye_position, &Eye_matrix);
-		}
 	}
 
 	//WMC - Draw animated warp effect (ie BSG thingy)
@@ -6301,6 +6338,8 @@ void ship_render(object * obj)
 		shipp->warpin_effect->warpShipRender();
 	else if(shipp->flags & SF_DEPART_WARP)
 		shipp->warpout_effect->warpShipRender();
+
+	gr_disable_team_color();
 }
 
 void ship_render_cockpit(object *objp)
@@ -6323,16 +6362,15 @@ void ship_render_cockpit(object *objp)
 
 	matrix eye_ori = vmd_identity_matrix;
 	vec3d eye_pos = vmd_zero_vector;
-	ship_get_eye(&eye_pos, &eye_ori, objp, false);
+	ship_get_eye(&eye_pos, &eye_ori, objp, false, true);
 
 	vec3d pos = vmd_zero_vector;
 
 	vm_vec_unrotate(&pos, &sip->cockpit_offset, &eye_ori);
-	vm_vec_add2(&pos, &eye_pos);
 	if (!Cmdline_nohtl)
 	{
 		gr_set_proj_matrix(Proj_fov, gr_screen.clip_aspect, 0.02f, 10.0f*pm->rad);
-		gr_set_view_matrix(&Eye_position, &Eye_matrix);
+		gr_set_view_matrix(&vmd_zero_vector, &Eye_matrix);
 	}
 
 	//Zbuffer
@@ -6354,6 +6392,28 @@ void ship_render_cockpit(object *objp)
 	}
 
 	hud_save_restore_camera_data(0);
+}
+
+void ship_render_show_ship_cockpit(object *objp)
+{
+	vec3d cockpit_eye_pos;
+	matrix dummy;
+	ship_get_eye(&cockpit_eye_pos, &dummy, objp, true, true); //Get cockpit eye position
+	
+	gr_end_view_matrix();
+	gr_end_proj_matrix();
+	gr_set_proj_matrix(Proj_fov, gr_screen.clip_aspect, 0.05f, Max_draw_distance);
+	gr_set_view_matrix(&cockpit_eye_pos, &Eye_matrix); // Set Camera to cockpit eye position
+	
+	Glowpoint_override = true; // Turn off glowpoints so they dont get rendered fixed at origin
+	model_set_detail_level(0);
+	model_render(Ship_info[Ships[objp->instance].ship_info_index].model_num, &objp->orient, &vmd_zero_vector, MR_NORMAL | MR_LOCK_DETAIL, OBJ_INDEX(objp)); // Render ship model with fixed detail level 0 so its not switching LOD when moving away from origin
+	Glowpoint_override = false;
+
+	gr_end_view_matrix();
+	gr_end_proj_matrix();
+	gr_set_proj_matrix(Proj_fov, gr_screen.clip_aspect, Min_draw_distance, Max_draw_distance);
+	gr_set_view_matrix(&Eye_position, &Eye_matrix); // Reset Camera to normal
 }
 
 void ship_init_cockpit_displays(ship *shipp)
@@ -6426,7 +6486,7 @@ void ship_add_cockpit_display(cockpit_display_info *display, int cockpit_model_n
 		return;
 	}
 
-	int i, tm_num, diffuse_target = -1, glow_target = -1, bmp_handle = -1;
+	int i, tm_num, diffuse_target = -1, glow_target = -1, glow_handle = -1, diffuse_handle = -1;
 	int w, h;
 	cockpit_display new_display;
 
@@ -6439,30 +6499,22 @@ void ship_add_cockpit_display(cockpit_display_info *display, int cockpit_model_n
 		if ( tm_num >= 0 ) {
 			diffuse_target = i*TM_NUM_TYPES;
 			glow_target = i*TM_NUM_TYPES+TM_GLOW_TYPE;
-			bmp_handle = pm->maps[i].textures[tm_num].GetTexture();
+
+			diffuse_handle = pm->maps[i].textures[TM_BASE_TYPE].GetTexture();
+			glow_handle = pm->maps[i].textures[TM_GLOW_TYPE].GetTexture();
 			break;
 		}
 	}
 
-	// if we still don't have a valid bmp_handle, then this texture name is invalid. Scold and bail
-	if ( bmp_handle < 0 ) {
-		Warning(LOCATION, "Invalid texture target defined: %s", display->filename);
-		return;
-	}
+	// create a render target for this cockpit texture
+	if ( Player_cockpit_textures[glow_target] < 0) {
 
-	if (glow_target != -1 && diffuse_target != -1) {
-		// create a render target for this cockpit texture
-		if ( Player_cockpit_textures[diffuse_target] < 0 || Player_cockpit_textures[glow_target] < 0) {
+		bm_get_info(diffuse_handle, &w, &h);
+		Player_cockpit_textures[glow_target] = bm_make_render_target(w, h, BMP_FLAG_RENDER_TARGET_DYNAMIC);
 
-			bm_get_info(bmp_handle, &w, &h);
-			Player_cockpit_textures[diffuse_target] = bm_make_render_target(w, h, BMP_FLAG_RENDER_TARGET_DYNAMIC);
-
-			// if no render target was made, bail
-			if ( Player_cockpit_textures[diffuse_target] < 0 ) {
-				return;
-			}
-
-			Player_cockpit_textures[glow_target] = Player_cockpit_textures[diffuse_target];
+		// if no render target was made, bail
+		if ( Player_cockpit_textures[glow_target] < 0 ) {
+			return;
 		}
 	}
 
@@ -6489,8 +6541,8 @@ void ship_add_cockpit_display(cockpit_display_info *display, int cockpit_model_n
 	new_display.offset[1] = display->offset[1];
 	new_display.size[0] = display->size[0];
 	new_display.size[1] = display->size[1];
-	new_display.source = bmp_handle;
-	new_display.target = Player_cockpit_textures[diffuse_target];
+	new_display.source = glow_handle;
+	new_display.target = Player_cockpit_textures[glow_target];
 
 	Player_displays.push_back(new_display);
 }
@@ -6539,8 +6591,11 @@ int ship_start_render_cockpit_display(int cockpit_display_num)
 	int cull = gr_set_cull(0);
 
 	gr_clear();
-	gr_set_bitmap(display->source);
-	gr_bitmap(0, 0, false);
+	
+	if ( display->source >= 0 ) {
+		gr_set_bitmap(display->source);
+		gr_bitmap(0, 0, false);
+	}
 
 	if ( display->background >= 0 ) {
 		gr_set_bitmap(display->background);
@@ -6773,6 +6828,29 @@ void ship_actually_depart(int shipnum, int method)
 	}
 }
 
+// no destruction effects, not for player destruction and multiplayer, only self-destruction
+void ship_destroy_instantly(object *ship_obj, int shipnum)
+{
+	Assert(ship_obj->type == OBJ_SHIP);
+	Assert(!(ship_obj == Player_obj));
+	Assert(!(Game_mode & GM_MULTIPLAYER));
+
+	// undocking and death preperation
+	ship_stop_fire_primary(ship_obj);
+	ai_deathroll_start(ship_obj);
+
+	mission_log_add_entry(LOG_SELF_DESTRUCTED, Ships[ship_obj->instance].ship_name, NULL );
+	
+	// scripting stuff
+	Script_system.SetHookObject("Self", ship_obj);
+	Script_system.RunCondition(CHA_DEATH, 0, NULL, ship_obj);
+	Script_system.RemHookVars(2, "Self", "Killer");
+
+	ship_obj->flags |= OF_SHOULD_BE_DEAD;
+	ship_cleanup(shipnum,SHIP_DESTROYED);
+}
+
+
 /**
  * Merge ship_destroyed and ship_departed and ship_vanished
  */
@@ -6784,6 +6862,7 @@ void ship_cleanup(int shipnum, int cleanup_mode)
 	Assert(Objects[Ships[shipnum].objnum].flags & OF_SHOULD_BE_DEAD);
 
 	ship *shipp = &Ships[shipnum];
+	object *objp = &Objects[shipp->objnum];
 
 	// add the information to the exited ship list
 	if (cleanup_mode == SHIP_DESTROYED) {
@@ -6810,7 +6889,7 @@ void ship_cleanup(int shipnum, int cleanup_mode)
 	if (cleanup_mode == SHIP_DEPARTED) {
 		// see if this ship departed within the radius of a jump node -- if so, put the node name into
 		// the secondary mission log field
-		CJumpNode *jnp = jumpnode_get_which_in(&Objects[shipp->objnum]);
+		CJumpNode *jnp = jumpnode_get_which_in(objp);
 		if(jnp==NULL)
 			mission_log_add_entry(LOG_SHIP_DEPARTED, shipp->ship_name, NULL, shipp->wingnum);
 		else
@@ -6862,6 +6941,14 @@ void ship_cleanup(int shipnum, int cleanup_mode)
 		ai_ship_destroy(shipnum, SEF_DEPARTED);		// should still do AI cleanup after ship has departed
 	}
 
+	// Goober5000 - lastly, clear out the dead-docked list, per Mantis #2294
+	// (for exploding ships, this list should have already been cleared by now, via
+	// do_dying_undock_physics, except in the case of the destroy-instantly sexp)
+	while (object_is_dead_docked(objp))
+	{
+		object *docked_objp = dock_get_first_dead_docked_object(objp);
+		dock_dead_undock_objects(objp, docked_objp);
+	}
 }
 
 /**
@@ -7140,7 +7227,11 @@ void ship_dying_frame(object *objp, int ship_num)
 				polymodel *pm = model_get(sip->model_num);
 
 				// Gets two random points on the surface of a submodel
-				submodel_get_two_random_points(pm->id, pm->detail[0], &pnt1, &pnt2 );
+				if ( Cmdline_old_collision_sys ) {
+					submodel_get_two_random_points(pm->id, pm->detail[0], &pnt1, &pnt2 );
+				} else {
+					submodel_get_two_random_points_better(pm->id, pm->detail[0], &pnt1, &pnt2 );
+				}
 
 				model_find_world_point(&outpnt, &pnt1, sip->model_num, pm->detail[0], &objp->orient, &objp->pos );
 
@@ -7250,7 +7341,11 @@ void ship_dying_frame(object *objp, int ship_num)
 				vec3d tmp, outpnt, pnt1, pnt2;
 
 				// Gets two random points on the surface of a submodel [KNOSSOS]
-				submodel_get_two_random_points(pm->id, pm->detail[0], &pnt1, &pnt2 );
+				if ( Cmdline_old_collision_sys ) {
+					submodel_get_two_random_points(pm->id, pm->detail[0], &pnt1, &pnt2 );
+				} else {
+					submodel_get_two_random_points_better(pm->id, pm->detail[0], &pnt1, &pnt2 );
+				}
 
 				vm_vec_avg( &tmp, &pnt1, &pnt2 );
 				model_find_world_point(&outpnt, &tmp, pm->id, pm->detail[0], &objp->orient, &objp->pos );
@@ -8695,18 +8790,20 @@ int ship_create(matrix *orient, vec3d *pos, int ship_type, char *ship_name)
 	ship_copy_subsystem_fixup(sip);
 	show_ship_subsys_count();
 
-	if ( sip->num_detail_levels < pm->n_detail_levels )
+	if ( sip->num_detail_levels != pm->n_detail_levels )
 	{
-		Warning(LOCATION, "For ship '%s', detail level\nmismatch. Table has %d,\nPOF has %d.", sip->name, sip->num_detail_levels, pm->n_detail_levels );
-
-		for (i=0; i<pm->n_detail_levels; i++ )	{
-			sip->detail_distance[i] = 0;
+		if ( !Is_standalone )
+		{
+			// just log to file for standalone servers
+			Warning(LOCATION, "For ship '%s', detail level\nmismatch. Table has %d,\nPOF has %d.", sip->name, sip->num_detail_levels, pm->n_detail_levels );
 		}
-	}
-	
-	for (i=0; i<sip->num_detail_levels; i++ )	{
-		pm->detail_depth[i] = i2fl(sip->detail_distance[i]);
-	}
+		else
+		{
+			nprintf(("Warning",  "For ship '%s', detail level mismatch. Table has %d, POF has %d.", sip->name, sip->num_detail_levels, pm->n_detail_levels ));
+		}	
+	}		
+	for ( i=0; i<pm->n_detail_levels; i++ )
+		pm->detail_depth[i] = (i < sip->num_detail_levels) ? i2fl(sip->detail_distance[i]) : 0.0f;
 
 	// JAS: Nav buoys don't need to do collisions!
 	// G5K: Corrected to apply specifically for ships with the no-collide flag.  (In retail, navbuoys already have this flag, so this doesn't break anything.)
@@ -8881,13 +8978,20 @@ void ship_model_change(int n, int ship_type)
 
 	ship_copy_subsystem_fixup(sip);
 
-	if ( sip->num_detail_levels < pm->n_detail_levels )	{
-		Warning(LOCATION, "For ship '%s', detail level\nmismatch (POF needs %d)", sip->name, pm->n_detail_levels );
-
-		for (i=0; i<pm->n_detail_levels; i++ )	{
-			sip->detail_distance[i] = 0;
+	if ( sip->num_detail_levels != pm->n_detail_levels )
+	{
+		if ( !Is_standalone )
+		{
+			// just log to file for standalone servers
+			Warning(LOCATION, "For ship '%s', detail level\nmismatch. Table has %d,\nPOF has %d.", sip->name, sip->num_detail_levels, pm->n_detail_levels );
 		}
-	}
+		else
+		{
+			nprintf(("Warning",  "For ship '%s', detail level mismatch. Table has %d, POF has %d.", sip->name, sip->num_detail_levels, pm->n_detail_levels ));
+		}
+	}	
+	for ( i=0; i<pm->n_detail_levels; i++ )
+		pm->detail_depth[i] = (i < sip->num_detail_levels) ? i2fl(sip->detail_distance[i]) : 0.0f;
 
 	if (sp->shield_integrity != NULL) {
 		vm_free(sp->shield_integrity);
@@ -8903,10 +9007,6 @@ void ship_model_change(int n, int ship_type)
 		}
 	} else {
 		sp->shield_integrity = NULL;
-	}
-
-	for (i=0; i<sip->num_detail_levels; i++ )	{
-		pm->detail_depth[i] = i2fl(sip->detail_distance[i]);
 	}
 
 	// reset texture animations
@@ -8927,7 +9027,6 @@ void change_ship_type(int n, int ship_type, int by_sexp)
 	ship_info	*sip;
 	ship_info	*sip_orig;
 	ship			*sp;
-	ship		sp_orig;
 	ship_weapon *swp;
 	ship_subsys *ss;
 	object		*objp;
@@ -8937,7 +9036,6 @@ void change_ship_type(int n, int ship_type, int by_sexp)
 
 	Assert( n >= 0 && n < MAX_SHIPS );
 	sp = &Ships[n];
-	sp_orig = Ships[n];
 	sip = &(Ship_info[ship_type]);
 	swp = &sp->weapons;
 	sip_orig = &Ship_info[sp->ship_info_index];
@@ -8946,32 +9044,46 @@ void change_ship_type(int n, int ship_type, int by_sexp)
 	ph_inf = objp->phys_info;
 
 
+	// Goober5000 - we can't copy the ship object because the tree of structs contains at least
+	// one class without a copy constructor.  So let's just save the information we need.
+
+	// these are wiped by ets_init_ship
+	int orig_wep_rechg_idx = sp->weapon_recharge_index;
+	int orig_shd_rechg_idx = sp->shield_recharge_index;
+	int orig_eng_rechg_idx = sp->engine_recharge_index;
+
+
 	// Goober5000 - maintain the original hull, shield, and subsystem percentages... gah
+	// ...except when in FRED, because this stuff is handled in the missionparse/missionsave part. The E
 
-	// hull
-	if (sp->special_hitpoints) {
-		hull_pct = objp->hull_strength / sp->ship_max_hull_strength; 
+	if (!Fred_running) {
+		// hull
+		if (sp->special_hitpoints) {
+			hull_pct = objp->hull_strength / sp->ship_max_hull_strength; 
+		} else {
+			Assert( Ship_info[sp->ship_info_index].max_hull_strength > 0.0f );
+			hull_pct = objp->hull_strength / Ship_info[sp->ship_info_index].max_hull_strength;
+		}
+
+		// extra check
+		Assert(hull_pct > 0.0f && hull_pct <= 1.0f);
+		CLAMP(hull_pct, 0.1f, 1.0f);
+
+		// shield
+		if (sp->special_shield > 0) {
+			shield_pct = shield_get_strength(objp) / sp->ship_max_shield_strength;
+		} else if (Ship_info[sp->ship_info_index].max_shield_strength > 0.0f) {
+			shield_pct = shield_get_strength(objp) / Ship_info[sp->ship_info_index].max_shield_strength;
+		} else {
+			shield_pct = 0.0f;
+		}
+
+		// extra check
+		Assert(shield_pct >= 0.0f && shield_pct <= 1.0f);
+		CLAMP(shield_pct, 0.0f, 1.0f);
 	} else {
-		Assert( Ship_info[sp->ship_info_index].max_hull_strength > 0.0f );
-		hull_pct = objp->hull_strength / Ship_info[sp->ship_info_index].max_hull_strength;
+		shield_pct = hull_pct = 1.0f;
 	}
-
-	// extra check
-	Assert(hull_pct > 0.0f && hull_pct <= 1.0f);
-    CLAMP(hull_pct, 0.1f, 1.0f);
-
-	// shield
-	if (sp->special_shield > 0) {
-		shield_pct = shield_get_strength(objp) / sp->ship_max_shield_strength;
-	} else if (Ship_info[sp->ship_info_index].max_shield_strength > 0.0f) {
-		shield_pct = shield_get_strength(objp) / Ship_info[sp->ship_info_index].max_shield_strength;
-	} else {
-		shield_pct = 0.0f;
-	}
-
-	// extra check
-	Assert(shield_pct >= 0.0f && shield_pct <= 1.0f);
-    CLAMP(shield_pct, 0.0f, 1.0f);
 
 	// subsystems
 	int num_saved_subsystems = 0;
@@ -9033,7 +9145,7 @@ void change_ship_type(int n, int ship_type, int by_sexp)
 		objp->hull_strength = 100.0f;
 	} else {
 		if (sp->special_hitpoints > 0) {
-			sp->ship_max_hull_strength = (float)sp->special_hitpoints > 0;
+			sp->ship_max_hull_strength = (float)sp->special_hitpoints;
 		} else {
 			sp->ship_max_hull_strength = sip->max_hull_strength;
 		}
@@ -9233,8 +9345,13 @@ void change_ship_type(int n, int ship_type, int by_sexp)
 	sp->model_instance_num = model_create_instance(sip->model_num);
 
 	// Valathil - Reinitialize collision checks
-	obj_remove_pairs(objp);
-	obj_add_pairs(objp->instance);
+	if ( Cmdline_old_collision_sys ) {
+		obj_remove_pairs(objp);
+		obj_add_pairs(OBJ_INDEX(objp));
+	} else {
+		obj_remove_collider(OBJ_INDEX(objp));
+		obj_add_collider(OBJ_INDEX(objp));
+	}
 
 	// The E - If we're switching during gameplay, make sure we get valid primary/secondary selections
 	if ( by_sexp ) {
@@ -9247,9 +9364,9 @@ void change_ship_type(int n, int ship_type, int by_sexp)
 		}
 
 		// While we're at it, let's copy over the ETS settings too
-		sp->weapon_recharge_index = sp_orig.weapon_recharge_index;
-		sp->shield_recharge_index = sp_orig.shield_recharge_index;
-		sp->engine_recharge_index = sp_orig.engine_recharge_index;
+		sp->weapon_recharge_index = orig_wep_rechg_idx;
+		sp->shield_recharge_index = orig_shd_rechg_idx;
+		sp->engine_recharge_index = orig_eng_rechg_idx;
 	}
 
 	// zookeeper - If we're switching in the loadout screen, make sure we retain initial velocity set in FRED
@@ -9258,6 +9375,42 @@ void change_ship_type(int n, int ship_type, int by_sexp)
 		Objects[sp->objnum].phys_info.vel.xyz.z = Objects[sp->objnum].phys_info.speed;
 		Objects[sp->objnum].phys_info.prev_ramp_vel = Objects[sp->objnum].phys_info.vel;
 		Objects[sp->objnum].phys_info.desired_vel = Objects[sp->objnum].phys_info.vel;
+	}
+
+	// Goober5000 - if we're changing to a ship class that has a different default set of orders, update the orders
+	// (this avoids wiping the orders if we're e.g. changing between fighter classes)
+	if (Fred_running)
+	{
+		int old_defaults = ship_get_default_orders_accepted(sip_orig);
+		int new_defaults = ship_get_default_orders_accepted(sip);
+
+		if (old_defaults != new_defaults)
+			sp->orders_accepted = new_defaults;
+	}
+
+	// Goober5000 - deal with texture replacement by re-applying the same code we used during parsing
+	if (sp->ship_replacement_textures != NULL)
+	{
+		// clear them out because the new positions may be different
+		for (i = 0; i < MAX_REPLACEMENT_TEXTURES; i++)
+			sp->ship_replacement_textures[i] = -1;
+
+		// now fill them in according to texture name
+		for (i = 0; i < p_objp->num_texture_replacements; i++)
+		{
+			int j;
+			polymodel *pm = model_get(sip->model_num);
+
+			// look for textures
+			for (j = 0; j < pm->n_textures; j++)
+			{
+				texture_map *tmap = &pm->maps[j];
+
+				int tnum = tmap->FindTexture(p_objp->replacement_textures[i].old_texture);
+				if(tnum > -1)
+					sp->ship_replacement_textures[j * TM_NUM_TYPES + tnum] = p_objp->replacement_textures[i].new_texture_id;
+			}
+		}
 	}
 }
 
@@ -9717,7 +9870,7 @@ int ship_fire_primary(object * obj, int stream_weapons, int force)
 		}
 
 	// lets start gun convergence / autoaim code from here - Wanderer
-	has_converging_autoaim = ((sip->aiming_flags & AIM_FLAG_AUTOAIM_CONVERGENCE || (The_mission.ai_profile->player_autoaim_fov[Game_skill_level] > 0.0f)) && aip->target_objnum != -1);
+	has_converging_autoaim = ((sip->aiming_flags & AIM_FLAG_AUTOAIM_CONVERGENCE || (The_mission.ai_profile->player_autoaim_fov[Game_skill_level] > 0.0f && !( Game_mode & GM_MULTIPLAYER ))) && aip->target_objnum != -1);
 	has_autoaim = ((has_converging_autoaim || (sip->aiming_flags & AIM_FLAG_AUTOAIM)) && aip->target_objnum != -1);
 	needs_target_pos = ((has_autoaim || (sip->aiming_flags & AIM_FLAG_AUTO_CONVERGENCE)) && aip->target_objnum != -1);
 	
@@ -9820,7 +9973,14 @@ int ship_fire_primary(object * obj, int stream_weapons, int force)
 		// Goober5000 (thanks to _argv[-1] for the original idea)
 		if (!(The_mission.ai_profile->flags & AIPF_DISABLE_LINKED_FIRE_PENALTY))
 		{
-			next_fire_delay *= 1.0f + (num_primary_banks - 1) * 0.5f;		//	50% time penalty if banks linked
+			int effective_primary_banks = 0;
+			for (int it = 0; it < num_primary_banks; it++)
+				if (Weapon_info[swp->primary_bank_weapons[it]].wi_flags3 & WIF3_NOLINK)
+					continue;
+				else
+					effective_primary_banks++;
+
+			next_fire_delay *= 1.0f + (effective_primary_banks - 1) * 0.5f;		//	50% time penalty if banks linked
 		}
 
 		if (winfo_p->fof_spread_rate > 0.0f)
@@ -10380,8 +10540,9 @@ int ship_fire_primary(object * obj, int stream_weapons, int force)
 			target = NULL;
 		if (objp == Player_obj && Player_ai->target_objnum != -1)
 			target = &Objects[Player_ai->target_objnum]; 
+
 		Script_system.SetHookObjects(2, "User", objp, "Target", target);
-		Script_system.RunCondition(CHA_ONWPFIRED, 0, NULL, objp);
+		Script_system.RunCondition(CHA_ONWPFIRED, 0, NULL, objp, 1);
 
 		Script_system.RunCondition(CHA_PRIMARYFIRE, 0, NULL, objp);
 	}
@@ -12003,7 +12164,7 @@ void ship_set_eye( object *obj, int eye_index)
 // the vector of the eye is returned in the parameter 'eye'.  The orientation of the
 // eye is returned in orient.  (NOTE: this is kind of bogus for now since non 0th element
 // eyes have no defined up vector)
-void ship_get_eye( vec3d *eye_pos, matrix *eye_orient, object *obj, bool do_slew )
+void ship_get_eye( vec3d *eye_pos, matrix *eye_orient, object *obj, bool do_slew , bool from_origin)
 {
 	ship *shipp = &Ships[obj->instance];
 	polymodel *pm = model_get(Ship_info[shipp->ship_info_index].model_num);
@@ -12018,7 +12179,7 @@ void ship_get_eye( vec3d *eye_pos, matrix *eye_orient, object *obj, bool do_slew
 	// eye points are stored in an array -- the normal viewing position for a ship is the current_eye_index
 	// element.
 	eye *ep = &(pm->view_positions[Ships[obj->instance].current_viewpoint]);
-	model_find_world_point( eye_pos, &ep->pnt, pm->id, ep->parent, &obj->orient, &obj->pos );
+	model_find_world_point( eye_pos, &ep->pnt, pm->id, ep->parent, &obj->orient, from_origin ? &vmd_zero_vector : &obj->pos );
 	*eye_orient = obj->orient;
 
 	//	Modify the orientation based on head orientation.
@@ -14207,7 +14368,7 @@ char *ship_return_time_to_goal(char *outbuf, ship *sp)
 		}
 		sprintf(outbuf, NOX("%02d:%02d"), minutes, seconds);
 	} else {
-		sprintf( outbuf, XSTR( "Unknown", 497) );
+		strcpy( outbuf, XSTR( "Unknown", 497) );
 	}
 
 	return outbuf;
@@ -14654,7 +14815,7 @@ void ship_maybe_scream(ship *sp)
 			return;
 
 		// for WCSaga, only do a subset of the checks
-		if (!(The_mission.ai_profile->flags2 & AIPF2_PERFORM_LESS_SCREAM_CHECKS))
+		if (!(The_mission.ai_profile->flags2 & AIPF2_PERFORM_FEWER_SCREAM_CHECKS))
 		{
 			// bail if this ship isn't from the player wing
 			if (!(sp->flags & SF_FROM_PLAYER_WING))
@@ -17419,3 +17580,32 @@ bool ship_has_sound(object *objp, GameSoundsIndex id)
 		return true;
 }
 
+/**
+ * Given a ship with bounding box and a point, find the closest point on the bbox
+ *
+ * @param ship_obj Object that has the bounding box (should be a ship)
+ * @param start World position of the point being compared
+ * @param box_pt OUTPUT PARAMETER: closest point on the bbox to start
+ *
+ * @return point is inside bbox, TRUE/1
+ * @return point is outside bbox, FALSE/0
+ */
+int get_nearest_bbox_point(object *ship_obj, vec3d *start, vec3d *box_pt)
+{
+	vec3d temp, rf_start;
+	polymodel *pm;
+	pm = model_get(Ship_info[Ships[ship_obj->instance].ship_info_index].model_num);
+
+	// get start in ship rf
+	vm_vec_sub(&temp, start, &ship_obj->pos);
+	vm_vec_rotate(&rf_start, &temp, &ship_obj->orient);
+
+	// find box_pt
+	int inside = project_point_onto_bbox(&pm->mins, &pm->maxs, &rf_start, &temp);
+
+	// get box_pt in world rf
+	vm_vec_unrotate(box_pt, &temp, &ship_obj->orient);
+	vm_vec_add2(box_pt, &ship_obj->pos);
+
+	return inside;
+}

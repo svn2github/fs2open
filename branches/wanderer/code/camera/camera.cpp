@@ -141,6 +141,8 @@ void camera::set_custom_orientation_function(void (*n_func_custom_orientation)(c
 
 void camera::set_position(vec3d *in_position, float in_translation_time, float in_translation_acceleration_time, float in_translation_deceleration_time, float in_end_velocity)
 {
+	if (in_position == NULL)
+		return;
 	if(in_translation_time == 0.0f && in_translation_acceleration_time == 0.0f && in_translation_deceleration_time == 0.0f)
 	{
 		c_pos = *in_position;
@@ -174,6 +176,9 @@ void camera::set_translation_velocity(vec3d *in_velocity, float in_acceleration_
 
 void camera::set_rotation(matrix *in_orientation, float in_rotation_time, float in_rotation_acceleration_time, float in_rotation_deceleration_time)
 {
+	if (in_orientation == NULL)
+		return;
+
 	if(in_rotation_time == 0.0f && in_rotation_acceleration_time == 0.0f && in_rotation_deceleration_time == 0.0f)
 	{
 		c_ori = *in_orientation;
@@ -931,7 +936,7 @@ bool cam_set_camera(camid cid)
 	Viewer_mode |= VM_FREECAMERA;
 	Current_camera = cid;
 
-	if (Cutscene_camera_disables_hud) 
+	if (!Cutscene_camera_displays_hud) 
 	{
 		if(!Camera_hud_draw_saved)
 		{
@@ -947,7 +952,7 @@ void cam_reset_camera()
 {
 	Viewer_mode &= ~VM_FREECAMERA;
 
-	if (Cutscene_camera_disables_hud) 
+	if (!Cutscene_camera_displays_hud) 
 	{
 		hud_set_draw(Camera_hud_draw_value);
 		Camera_hud_draw_saved = false;

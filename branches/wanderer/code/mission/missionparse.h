@@ -29,6 +29,8 @@ struct p_dock_instance;
 #define NUM_NEBULAS			3				// how many background nebulas we have altogether
 #define NUM_NEBULA_COLORS	9
 
+#define DEFAULT_AMBIENT_LIGHT_LEVEL			0x00787878
+
 // arrival anchor types
 // mask should be high enough to avoid conflicting with ship anchors
 #define SPECIAL_ARRIVAL_ANCHOR_FLAG				0x1000
@@ -146,6 +148,7 @@ typedef struct mission {
 	char	squad_name[NAME_LENGTH];				// if the player has been reassigned to a squadron, this is the name of the squadron, otherwise empty string
 	char	loading_screen[GR_NUM_RESOLUTIONS][MAX_FILENAME_LEN];
 	char	skybox_model[MAX_FILENAME_LEN];
+	matrix	skybox_orientation;
 	char	envmap_name[MAX_FILENAME_LEN];
 	int		skybox_flags;
 	int		contrail_threshold;
@@ -191,10 +194,11 @@ typedef struct mission {
 		for ( i = 0; i < GR_NUM_RESOLUTIONS; i++ )
 			loading_screen[ i ][ 0 ] = '\0';
 		skybox_model[ 0 ] = '\0';
-		envmap_name[ 0 ] = '\0';
+		vm_set_identity(&skybox_orientation);
 		skybox_flags = 0;
+		envmap_name[ 0 ] = '\0';
 		contrail_threshold = 0;
-		ambient_light_level = 0;
+		ambient_light_level = DEFAULT_AMBIENT_LIGHT_LEVEL;
 		sound_environment.id = -1;
 		command_persona = 0;
 		command_sender[ 0 ] = '\0';
@@ -279,6 +283,7 @@ extern char *Object_flags[];
 extern char *Parse_object_flags[];
 extern char *Parse_object_flags_2[];
 extern char *Icon_names[];
+extern char *Mission_event_log_flags[];
 
 extern char *Cargo_names[MAX_CARGO];
 extern char Cargo_names_buf[MAX_CARGO][NAME_LENGTH];
@@ -363,6 +368,7 @@ typedef struct p_object {
 	int	behavior;							// ai_class;
 	int	ai_goals;							// sexp of lists of goals that this ship should try and do
 	char	cargo1;
+	SCP_string team_color_setting;
 
 	int	status_count;
 	int	status_type[MAX_OBJECT_STATUS];
@@ -648,8 +654,6 @@ typedef struct {
 #define MAX_P_WINGS		16
 #define MAX_SHIP_LIST	16
 
-#define TOKEN_LENGTH	32
-
 extern team_data Team_data[MAX_TVT_TEAMS];
 extern subsys_status *Subsys_status;
 extern int Subsys_index;
@@ -729,6 +733,9 @@ int mission_parse_lookup_callsign(char *name);
 void mission_parse_lookup_callsign_index(int index, char *out);
 int mission_parse_add_callsign(char *name);
 void mission_parse_reset_callsign();
+
+// is training mission
+int is_training_mission();
 
 // code to save/restore mission parse stuff
 int get_mission_info(char *filename, mission *missionp = NULL, bool basic = true);

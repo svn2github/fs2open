@@ -22,11 +22,13 @@
 
 
 #include "mission/missionparse.h"
+#include "parse/generic_log.h"
 #include "parse/parselo.h"
 #include "mission/missiongoals.h"
 #include "mission/missionlog.h"
 #include "mission/missionmessage.h"
 #include "globalincs/linklist.h"
+#include "globalincs/alphacolors.h"
 #include "io/timer.h"
 #include "ship/ship.h"
 #include "ai/aigoals.h"
@@ -308,6 +310,17 @@ char *Parse_object_flags_2[MAX_PARSE_OBJECT_FLAGS_2] = {
 	"cloaked",
 	"ship-locked",
 	"weapons-locked",
+};
+
+char *Mission_event_log_flags[MAX_MISSION_EVENT_LOG_FLAGS] = {
+	"true",
+	"false",
+	"always true",
+	"always false",
+	"first repeat",
+	"last repeat", 
+	"first trigger",
+	"last trigger",
 };
 
 
@@ -701,9 +714,15 @@ void parse_mission_info(mission *pm, bool basic = false)
 	}
 
 	strcpy_s(pm->skybox_model, "");
-	if (optional_string("$Skybox model:"))
+	if (optional_string("$Skybox Model:"))
 	{
 		stuff_string(pm->skybox_model, F_NAME, MAX_FILENAME_LEN);
+	}
+
+	vm_set_identity(&pm->skybox_orientation);
+	if (optional_string("+Skybox Orientation:"))
+	{
+		stuff_matrix(&pm->skybox_orientation);
 	}
 
 	if (optional_string("+Skybox Flags:")){
@@ -1797,9 +1816,8 @@ int parse_create_object_sub(p_object *p_objp)
 		}
 	}
 
-	// Goober5000
-	shipp->ship_max_shield_strength = Ship_info[shipp->ship_info_index].max_shield_strength * p_objp->ship_max_shield_strength_multiplier;
-	shipp->ship_max_hull_strength =  Ship_info[shipp->ship_info_index].max_hull_strength * p_objp->ship_max_hull_strength_multiplier;
+	shipp->ship_max_shield_strength = sip->max_shield_strength * p_objp->ship_max_shield_strength_multiplier;
+	shipp->ship_max_hull_strength =  sip->max_hull_strength * p_objp->ship_max_hull_strength_multiplier;
 	shipp->max_shield_recharge_pct = p_objp->max_shield_recharge_percent;
 
 	for (i=0;i<MAX_SHIELD_SECTIONS;i++)
@@ -1891,6 +1909,8 @@ int parse_create_object_sub(p_object *p_objp)
 	shipp->score = p_objp->score;
 	shipp->assist_score_pct = p_objp->assist_score_pct;
 	shipp->persona_index = p_objp->persona_index;
+	if (Ship_info[shipp->ship_info_index].uses_team_colors && !p_objp->team_color_setting.empty())
+		shipp->team_name = p_objp->team_color_setting;
 
 	// reset texture animations
 	shipp->base_texture_anim_frametime = game_get_overall_frametime();
@@ -1931,10 +1951,18 @@ int parse_create_object_sub(p_object *p_objp)
 
 	// other flag checks
 ////////////////////////
-	if (p_objp->ship_max_shield_strength_multiplier == 0.0f || (!Fred_running && !(p_objp->flags2 & P2_OF_FORCE_SHIELDS_ON) && (sip->flags2 & SIF2_INTRINSIC_NO_SHIELDS)))
+
+	// forcing the shields on or off depending on flags -- but only if shield strength supports it
+
+	// no strength means we can't have shields, period
+	if (sip->max_shield_strength * p_objp->ship_max_shield_strength_multiplier == 0.0f)
 		Objects[objnum].flags |= OF_NO_SHIELDS;
-	else if ((p_objp->ship_max_shield_strength_multiplier > 0.0f) && (p_objp->flags2 & P2_OF_FORCE_SHIELDS_ON))
+	// force shields on means we have them regardless of other flags; per r5332 this ranks above the next check
+	else if (p_objp->flags2 & P2_OF_FORCE_SHIELDS_ON)
 		Objects[objnum].flags &= ~OF_NO_SHIELDS;
+	// intrinsic no-shields means we have them off in-game
+	else if (!Fred_running && (sip->flags2 & SIF2_INTRINSIC_NO_SHIELDS))
+		Objects[objnum].flags |= OF_NO_SHIELDS;
 
 	// don't set the flag if the mission is ongoing in a multiplayer situation. This will be set by the players in the
 	// game only before the game or during respawning.
@@ -2238,7 +2266,11 @@ int parse_create_object_sub(p_object *p_objp)
 			vec3d v1, v2;
 
 			// DA 10/20/98 - sparks must be chosen on the hull and not any submodel
-			submodel_get_two_random_points(sip->model_num, pm->detail[0], &v1, &v2);
+			if ( Cmdline_old_collision_sys ) {
+				submodel_get_two_random_points(sip->model_num, pm->detail[0], &v1, &v2);
+			} else {
+				submodel_get_two_random_points_better(sip->model_num, pm->detail[0], &v1, &v2);
+			}
 			ship_hit_sparks_no_rotate(&Objects[objnum], &v1);
 		}
 	}
@@ -2384,7 +2416,10 @@ void resolve_parse_flags(object *objp, int parse_flags, int parse_flags2)
 	if (parse_flags & P_SF_REINFORCEMENT)
 		shipp->flags |= SF_REINFORCEMENT;
 
-	Assert(!((parse_flags & P_OF_NO_SHIELDS) && (parse_flags2 & P2_OF_FORCE_SHIELDS_ON)));
+	if ((parse_flags & P_OF_NO_SHIELDS) && (parse_flags2 & P2_OF_FORCE_SHIELDS_ON))
+	{
+		Warning(LOCATION, "The parser found a ship with both the \"force-shields-on\" and \"no-shields\" flags; this is inconsistent!");
+	}
 	if (parse_flags & P_OF_NO_SHIELDS)
 		objp->flags |= OF_NO_SHIELDS;
 
@@ -2680,6 +2715,17 @@ int parse_object(mission *pm, int flag, p_object *p_objp)
 		temp_team_names[i] = Iff_info[i].iff_name;
 
 	find_and_stuff("$Team:", &p_objp->team, F_NAME, temp_team_names, Num_iffs, "team name");
+
+	if (optional_string("$Team Color Setting:")) {
+		char temp[NAME_LENGTH];
+		stuff_string(temp, F_NAME, NAME_LENGTH);
+		p_objp->team_color_setting = temp;
+
+		if (Team_Colors.find(p_objp->team_color_setting) == Team_Colors.end()) {
+			mprintf(("Invalid team color specified in mission file for ship %s, resetting to default\n", p_objp->name));
+			p_objp->team_color_setting = Ship_info[p_objp->ship_class].default_team_name;
+		}
+	}
 
 	required_string("$Location:");
 	stuff_vec3d(&p_objp->pos);
@@ -2986,18 +3032,15 @@ int parse_object(mission *pm, int flag, p_object *p_objp)
 		fix_old_special_hits(p_objp, variable_index);
 	}
 
-	// set max hitpoint and shield values		
-	if (p_objp->special_shield != -1) {
-		if (Ship_info[p_objp->ship_class].max_shield_strength > 0.0f) {
-			p_objp->ship_max_shield_strength_multiplier = (float) p_objp->special_shield / Ship_info[p_objp->ship_class].max_shield_strength;
-		} else {
-			p_objp->ship_max_shield_strength_multiplier = 0.0f;
-		}
-	}
-	else {
+	// set custom shield value
+	if ((p_objp->special_shield != -1) && (Ship_info[p_objp->ship_class].max_shield_strength > 0.0f)) {
+		// the fact that we use a multiplier means we can't magically grant shields to ships which are tabled with 0 shields, unfortunately...
+		p_objp->ship_max_shield_strength_multiplier = (float) p_objp->special_shield / Ship_info[p_objp->ship_class].max_shield_strength;
+	} else {
 		p_objp->ship_max_shield_strength_multiplier = 1.0f;
 	}
-		
+	
+	// set custom hitpoint value
 	if (p_objp->special_hitpoints > 0) {
 		p_objp->ship_max_hull_strength_multiplier = (float) p_objp->special_hitpoints / Ship_info[p_objp->ship_class].max_hull_strength; 
 	}
@@ -3789,7 +3832,7 @@ int parse_wing_create_ships( wing *wingp, int num_to_create, int force, int spec
 				wingp->total_arrived_count += num_remaining;
 				wingp->current_wave = wingp->num_waves;
 
-				if ( mission_log_get_time(LOG_SHIP_DESTROYED, name, NULL, NULL) ) {
+				if ( mission_log_get_time(LOG_SHIP_DESTROYED, name, NULL, NULL) || mission_log_get_time(LOG_SELF_DESTRUCTED, name, NULL, NULL) ) {
 					wingp->total_destroyed += num_remaining;
 				} else if ( mission_log_get_time(LOG_SHIP_DEPARTED, name, NULL, NULL) ) {
 					wingp->total_departed += num_remaining;
@@ -4019,16 +4062,16 @@ int parse_wing_create_ships( wing *wingp, int num_to_create, int force, int spec
 	// possibly play some event driven music here.  Send a network packet indicating the wing was
 	// created.  Only do this stuff if actually in the mission.
 	if ( (objnum != -1) && (Game_mode & GM_IN_MISSION) ) {		// if true, we have created at least one new ship.
-		int i, ship_num;
+		int it, ship_num;
 
 		// see if this wing is a player starting wing, and if so, call the maybe_add_form_goal
 		// function to possibly make the wing form on the player
-		for (i = 0; i < MAX_STARTING_WINGS; i++ ) {
-			if ( Starting_wings[i] == wingnum ){
+		for (it = 0; it < MAX_STARTING_WINGS; it++ ) {
+			if ( Starting_wings[it] == wingnum ){
 				break;
 			}
 		}
-		if ( i < MAX_STARTING_WINGS ){
+		if ( it < MAX_STARTING_WINGS ){
 			ai_maybe_add_form_goal( wingp );
 		}
 
@@ -4057,11 +4100,11 @@ int parse_wing_create_ships( wing *wingp, int num_to_create, int force, int spec
 		if ( Fred_running ) {
 			Assert( wingp->ship_index[wingp->special_ship] != -1 );
 			int orders = Ships[wingp->ship_index[0]].orders_accepted;
-			for (i = 0; i < wingp->current_count; i++ ) {
-				if (i == wingp->special_ship)
+			for (it = 0; it < wingp->current_count; it++ ) {
+				if (it == wingp->special_ship)
 					continue;
 
-				if ( orders != Ships[wingp->ship_index[i]].orders_accepted ) {
+				if ( orders != Ships[wingp->ship_index[it]].orders_accepted ) {
 					Warning(LOCATION, "ships in wing %s are ignoring different player orders.  Please find Mark A\nto talk to him about this.", wingp->name );
 					break;
 				}
@@ -4640,6 +4683,23 @@ void parse_event(mission *pm)
 		}
 	}
 
+	if( optional_string("+Event Log Flags:") ) {
+		SCP_vector<SCP_string> buffer;
+		
+		stuff_string_list(buffer); 
+		for (int i = 0; i < (int)buffer.size(); i++) {
+			int add_flag = 1; 
+
+			for (int j = 0; j < MAX_MISSION_EVENT_LOG_FLAGS; j++) {
+				if (!stricmp(buffer[i].c_str(), Mission_event_log_flags[j])) {
+					// bitshift add_flag so that it equals the index of the flag in Mission_event_log_flags[]
+					add_flag = add_flag << j; 
+					event->mission_log_flags |= add_flag;
+				}
+			}
+		}
+	}
+
 	event->timestamp = timestamp(-1);
 
 	// sanity check on the repeat count variable
@@ -4986,7 +5046,7 @@ void parse_bitmaps(mission *pm)
 
 	if (pm->ambient_light_level == 0)
 	{
-		pm->ambient_light_level = 0x00787878;
+		pm->ambient_light_level = DEFAULT_AMBIENT_LIGHT_LEVEL;
 	}
 
 	// This should call light_set_ambient() to
@@ -5381,6 +5441,8 @@ int parse_mission(mission *pm, int flags)
 		sprintf(text, "Warning!\n\nThe current mission has generated %d warnings and/or errors during load.  These are usually caused by corrupted ship models or syntax errors in the mission file.  While FreeSpace Open will attempt to compensate for these issues, it cannot guarantee a trouble-free gameplay experience.  Source Code Project staff cannot provide assistance or support for these problems, as they are caused by the mission's data files, not FreeSpace Open's source code.", (saved_warning_count - Global_warning_count) + (saved_error_count - Global_error_count));
 		popup(PF_TITLE_BIG | PF_TITLE_RED | PF_NO_NETWORKING, 1, POPUP_OK, text);
 	}
+
+	log_printf(LOGFILE_EVENT_LOG, "Mission %s loaded.\n", pm->name); 
 
 	// success
 	return 0;
@@ -6985,7 +7047,7 @@ int allocate_subsys_status()
 // Goober5000
 int insert_subsys_status(p_object *pobjp)
 {
-	int i;
+	int i, new_index;
 
 	// this is not good; we have to allocate another slot, but then bump all the
 	// slots upward so that this particular parse object's subsystems are contiguous
@@ -6997,8 +7059,20 @@ int insert_subsys_status(p_object *pobjp)
 		memcpy(&Subsys_status[i], &Subsys_status[i-1], sizeof(subsys_status));
 	}
 
-	// return index for new element
-	return pobjp->subsys_index + pobjp->subsys_count;
+	// generate index for new element
+	new_index = pobjp->subsys_index + pobjp->subsys_count;
+	pobjp->subsys_count++;
+
+	// we also have to adjust all the indexes in existing parse objects
+	// (each p_object's subsys_index points to subsystem 0 in its list)
+	for (SCP_vector<p_object>::iterator ii = Parse_objects.begin(); ii != Parse_objects.end(); ++ii)
+	{
+		// bump up base index to accommodate inserted subsystem
+		if (ii->subsys_index >= new_index)
+			ii->subsys_index++;
+	}
+
+	return new_index;
 }
 
 // Goober5000

@@ -405,6 +405,15 @@ typedef struct ship_subsys_info {
 	float aggregate_current_hits;	// current count of hits for all subsystems of this type.	
 } ship_subsys_info;
 
+// Karajorma - Used by the alter-ship-flag SEXP as an alternative to having lots of ship flag SEXPs
+typedef struct ship_flag_name {
+	int flag;							// the actual ship flag constant as given by the define below
+	char flag_name[TOKEN_LENGTH];		// the name written to the mission file for its corresponding parse_object flag
+	int flag_list;						// is this flag in the 1st or 2nd ship flags list?
+} ship_flag_name;
+
+#define MAX_SHIP_FLAG_NAMES					9
+extern ship_flag_name Ship_flag_names[];
 
 // states for the flags variable within the ship structure
 // low bits are for mission file savable flags..
@@ -777,6 +786,12 @@ typedef struct ship {
 
 	RadarVisibility radar_last_status; // Last radar status
 	RadarVisibility radar_current_status; // Current radar status
+
+	SCP_string team_name;
+	SCP_string secondary_team_name;	//If the change-team-color sexp is used, these fields control the fading behaviour
+	fix team_change_timestamp;
+	int team_change_time;
+
 } ship;
 
 struct ai_target_priority {
@@ -1313,6 +1328,10 @@ typedef struct ship_info {
 	// rgb shield color
 	ubyte shield_color[3];
 
+	// HW2-style team coloring
+	bool uses_team_colors;
+	SCP_string default_team_name;
+
 	// optional afterburner trail values
 	generic_bitmap afterburner_trail;
 	float afterburner_trail_width_factor;
@@ -1373,6 +1392,7 @@ typedef struct ship_info {
 	man_thruster maneuvering[MAX_MAN_THRUSTERS];
 
 	int radar_image_2d_idx;
+	int radar_color_image_2d_idx;
 	int radar_image_size;
 	float radar_projection_size_mult;
 
@@ -1543,6 +1563,7 @@ extern void ship_process_pre( object * objp, float frametime );
 extern void ship_process_post( object * objp, float frametime );
 extern void ship_render( object * objp );
 extern void ship_render_cockpit( object * objp);
+extern void ship_render_show_ship_cockpit( object * objp);
 extern void ship_delete( object * objp );
 extern int ship_check_collision_fast( object * obj, object * other_obj, vec3d * hitpos );
 extern int ship_get_num_ships();
@@ -1554,6 +1575,7 @@ extern int ship_get_num_ships();
 #define SHIP_DEPARTED			( SHIP_DEPARTED_BAY | SHIP_DEPARTED_WARP )
 // Goober5000
 extern void ship_cleanup(int shipnum, int cleanup_mode);
+extern void ship_destroy_instantly(object *ship_obj, int shipnum);
 extern void ship_actually_depart(int shipnum, int method = SHIP_DEPARTED_WARP);
 
 extern int ship_fire_primary_debug(object *objp);	//	Fire the debug laser.
@@ -1649,7 +1671,7 @@ extern int ship_find_num_turrets(object *objp);
 extern void compute_slew_matrix(matrix *orient, angles *a);
 //extern camid ship_set_eye( object *obj, int eye_index);
 extern void ship_set_eye(object *obj, int eye_index);
-extern void ship_get_eye( vec3d *eye_pos, matrix *eye_orient, object *obj, bool do_slew = true );		// returns in eye the correct viewing position for the given object
+extern void ship_get_eye( vec3d *eye_pos, matrix *eye_orient, object *obj, bool do_slew = true, bool from_origin = false);		// returns in eye the correct viewing position for the given object
 //extern camid ship_get_followtarget_eye(object *obj);
 extern ship_subsys *ship_get_indexed_subsys( ship *sp, int index, vec3d *attacker_pos = NULL );	// returns index'th subsystem of this ship
 extern int ship_get_index_from_subsys(ship_subsys *ssp, int objnum, int error_bypass = 0);
@@ -1925,8 +1947,6 @@ int thruster_glow_anim_load(generic_anim *ga);
 // Sushi - Path metadata
 void init_path_metadata(path_metadata& metadata);
 
-// Ship select stuff
-extern int Default_ship_select_effect;
 
 typedef struct ship_effect {
 	char name[NAME_LENGTH];
@@ -1963,5 +1983,17 @@ bool ship_has_sound(object *objp, GameSoundsIndex id);
  * @return An index into Ship_info[], location of the default player ship.
  */
 int get_default_player_ship_index();
+
+/**
+ * Given a ship with bounding box and a point, find the closest point on the bbox
+ *
+ * @param ship_obj Object that has the bounding box (should be a ship)
+ * @param start World position of the point being compared
+ * @param box_pt OUTPUT PARAMETER: closest point on the bbox to start
+ *
+ * @return point is inside bbox, TRUE/1
+ * @return point is outside bbox, FALSE/0
+ */
+int get_nearest_bbox_point(object *ship_obj, vec3d *start, vec3d *box_pt);
 
 #endif

@@ -10,6 +10,7 @@
 #include "nebula/neb.h"
 #include "parse/parselo.h"
 #include "cmdline/cmdline.h"
+#include "mod_table/mod_table.h"
 #include "globalincs/def_files.h"
 #include "ship/ship.h"
 #include "freespace2/freespace.h"
@@ -381,7 +382,7 @@ void gr_opengl_post_process_end()
 				GL_state.Texture.SetActiveUnit(1);
 				GL_state.Texture.SetTarget(GL_TEXTURE_2D);
 				GL_state.Texture.Enable(Cockpit_depth_texture);
-				glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+				GL_state.Color(255, 255, 255, 255);
 				GL_state.Blend(GL_TRUE);
 				GL_state.SetAlphaBlendMode(ALPHA_BLEND_ADDITIVE);
 				
@@ -410,7 +411,7 @@ void gr_opengl_post_process_end()
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT);
 
-	glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+	GL_state.Color(255, 255, 255, 255);
 
 	// set and configure post shader ...
 
@@ -888,30 +889,32 @@ static char *opengl_post_load_shader(char *filename, int flags, int flags2)
 	const char *shader_flags = sflags.c_str();
 	int flags_len = strlen(shader_flags);
 
-	CFILE *cf_shader = cfopen(filename, "rt", CFILE_NORMAL, CF_TYPE_EFFECTS);
+	if (Enable_external_shaders && stricmp(filename, "fxaapre-f.sdr") && stricmp(filename, "fxaa-f.sdr") && stricmp(filename, "fxaa-v.sdr")) {
+		CFILE *cf_shader = cfopen(filename, "rt", CFILE_NORMAL, CF_TYPE_EFFECTS);
 
-	if (cf_shader != NULL && stricmp(filename, "fxaa-f.sdr") && stricmp(filename, "fxaa-v.sdr") ) {
-		int len = cfilelength(cf_shader);
-		char *shader = (char*) vm_malloc(len + flags_len + 1);
+		if (cf_shader != NULL  ) {
+			int len = cfilelength(cf_shader);
+			char *shader = (char*) vm_malloc(len + flags_len + 1);
 
-		strcpy(shader, shader_flags);
-		memset(shader + flags_len, 0, len + 1);
-		cfread(shader + flags_len, len + 1, 1, cf_shader);
-		cfclose(cf_shader);
+			strcpy(shader, shader_flags);
+			memset(shader + flags_len, 0, len + 1);
+			cfread(shader + flags_len, len + 1, 1, cf_shader);
+			cfclose(cf_shader);
 
-		return shader;
-	} else {
-		mprintf(("   Loading built-in default shader for: %s\n", filename));
-		char* def_shader = defaults_get_file(filename);
-		size_t len = strlen(def_shader);
-		char *shader = (char*) vm_malloc(len + flags_len + 1);
-
-		strcpy(shader, shader_flags);
-		strcat(shader, def_shader);
-		//memset(shader + flags_len, 0, len + 1);
-
-		return shader;
+			return shader;
+		} 
 	}
+
+	mprintf(("   Loading built-in default shader for: %s\n", filename));
+	char* def_shader = defaults_get_file(filename);
+	size_t len = strlen(def_shader);
+	char *shader = (char*) vm_malloc(len + flags_len + 1);
+
+	strcpy(shader, shader_flags);
+	strcat(shader, def_shader);
+	//memset(shader + flags_len, 0, len + 1);
+
+	return shader;
 
 }
 
