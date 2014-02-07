@@ -129,7 +129,7 @@ void object::clear()
 	orient = last_orient = vmd_identity_matrix;
 	radius = hull_strength = sim_hull_strength = 0.0f;
 	physics_init( &phys_info );
-	memset(shield_quadrant, 0, MAX_SHIELD_SECTIONS * sizeof(float));
+	shield_quadrant.clear();
 	objsnd_num.clear();
 	net_signature = 0;
 
@@ -259,6 +259,9 @@ float get_max_shield_quad(object *objp, int segment)
 		return 0.0f;
 	}
 
+	return Ships[objp->instance].ship_max_shield_strength / objp->n_quadrants;
+	// NOTE: commented out when merging model point shields from trunk
+	// due to being too difficult to merge
 	if (objp->n_shield_segments == 1)
 		return Ships[objp->instance].ship_max_shield_strength;
 	else if (objp->n_shield_segments == 2) {
@@ -514,6 +517,8 @@ int obj_create(ubyte type,int parent_obj,int instance, matrix * orient,
 	}
 	obj->radius 				= radius;
 
+	obj->n_quadrants = DEFAULT_SHIELD_SECTIONS; // Might be changed by the ship creation code
+	obj->shield_quadrant.resize(obj->n_quadrants);
 	return objnum;
 }
 

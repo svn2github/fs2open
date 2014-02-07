@@ -306,6 +306,7 @@ flag_def_list Ship_flags[] = {
 	{ "no ets",						SIF2_NO_ETS,				1 },
 	{ "no lighting",				SIF2_NO_LIGHTING,			1 },
 	{ "auto spread shields",		SIF2_AUTO_SPREAD_SHIELDS,	1 },
+	{ "model point shields",		SIF2_MODEL_POINT_SHIELDS,	1 },
 
 	// to keep things clean, obsolete options go last
 	{ "ballistic primaries",		-1,		255 }
@@ -902,7 +903,7 @@ void init_ship_entry(ship_info *sip)
 	sip->shield_color[1] = 255;
 	sip->shield_color[2] = 255;
 
-	for (i = 0; i < MAX_SHIELD_SECTIONS; i++)
+	for (i = 0; i < DEFAULT_SHIELD_SECTIONS; i++)
 		sip->max_shield_segment_strength[i] = 0.0f;
 
 
@@ -994,7 +995,7 @@ void init_ship_entry(ship_info *sip)
 	sip->emp_resistance_mod = 0.0f;
 
 	sip->piercing_damage_draw_limit = 0.10f;
-	sip->num_shield_segments = MAX_SHIELD_SECTIONS;
+	sip->num_shield_segments = DEFAULT_SHIELD_SECTIONS;
 
 	sip->damage_lightning_type = SLT_DEFAULT;
 
@@ -2488,8 +2489,8 @@ int parse_ship_values(ship_info* sip, bool isTemplate, bool first_time, bool rep
 
 	if(optional_string("$Shields:")) {
 		stuff_float(&sip->max_shield_strength);
-		sip->num_shield_segments = MAX_SHIELD_SECTIONS;
-		for (i = 0; i < MAX_SHIELD_SECTIONS; i++)
+		sip->num_shield_segments = DEFAULT_SHIELD_SECTIONS;
+		for (i = 0; i < DEFAULT_SHIELD_SECTIONS; i++)
 			sip->max_shield_segment_strength[i] = sip->max_shield_strength / 4;
 	}
 
@@ -2509,6 +2510,34 @@ int parse_ship_values(ship_info* sip, bool isTemplate, bool first_time, bool rep
 			sip->auto_shield_spread_from_lod = temp;
 	}
 
+	if(optional_string("$Model Point Shield Controls:")) {
+		SCP_vector<SCP_string> ctrl_strings;
+		int num_strings = stuff_string_list(ctrl_strings);
+
+		// Init all to -1 in case some aren't supplied...
+		sip->shield_point_augment_ctrls[FRONT_QUAD] = -1;
+		sip->shield_point_augment_ctrls[REAR_QUAD] = -1;
+		sip->shield_point_augment_ctrls[LEFT_QUAD] = -1;
+		sip->shield_point_augment_ctrls[RIGHT_QUAD] = -1;
+
+		for (int i = 0; i < num_strings; i++) {
+			const char *str = ctrl_strings[i].c_str();
+
+			if (!stricmp(str, "front"))
+				sip->shield_point_augment_ctrls[FRONT_QUAD] = i;
+			else if (!stricmp(str, "rear"))
+				sip->shield_point_augment_ctrls[REAR_QUAD] = i;
+			else if (!stricmp(str, "left"))
+				sip->shield_point_augment_ctrls[LEFT_QUAD] = i;
+			else if (!stricmp(str, "right"))
+				sip->shield_point_augment_ctrls[RIGHT_QUAD] = i;
+			else if (!stricmp(str, "none"))
+				sip->shield_point_augment_ctrls[RIGHT_QUAD] = -1;
+			else
+				Warning(LOCATION, "Unrecognized value \"%s\" passed to $Model Point Shield Controls, ignoring...", str);
+		}
+	}
+
 	// optional shield color
 	if(optional_string("$Shield Color:")){
 		stuff_ubyte(&sip->shield_color[0]);
@@ -2519,11 +2548,11 @@ int parse_ship_values(ship_info* sip, bool isTemplate, bool first_time, bool rep
 	if(optional_string("$Number of Shield Segments:")){
 		stuff_int(&sip->num_shield_segments);
 		if(sip->num_shield_segments != 1 && sip->num_shield_segments != 2)
-			sip->num_shield_segments = MAX_SHIELD_SECTIONS;
+			sip->num_shield_segments = DEFAULT_SHIELD_SECTIONS;
 		if (sip->max_shield_strength > 0.0f) {
 			switch(sip->num_shield_segments) {
 				case 1:
-					for (i = 0; i < MAX_SHIELD_SECTIONS; i++) {
+					for (i = 0; i < DEFAULT_SHIELD_SECTIONS; i++) {
 						if (i == 0)
 							sip->max_shield_segment_strength[i] = sip->max_shield_strength;
 						else
@@ -2531,7 +2560,7 @@ int parse_ship_values(ship_info* sip, bool isTemplate, bool first_time, bool rep
 					}
 					break;
 				case 2:
-					for (i = 0; i < MAX_SHIELD_SECTIONS; i++) {
+					for (i = 0; i < DEFAULT_SHIELD_SECTIONS; i++) {
 						if (i < 2)
 							sip->max_shield_segment_strength[i] = sip->max_shield_strength / 2;
 						else
@@ -2539,8 +2568,8 @@ int parse_ship_values(ship_info* sip, bool isTemplate, bool first_time, bool rep
 					}
 					break;
 				default:
-					sip->num_shield_segments = MAX_SHIELD_SECTIONS;
-					for (i = 0; i < MAX_SHIELD_SECTIONS; i++)
+					sip->num_shield_segments = DEFAULT_SHIELD_SECTIONS;
+					for (i = 0; i < DEFAULT_SHIELD_SECTIONS; i++)
 						sip->max_shield_segment_strength[i] = sip->max_shield_strength / 4;
 					break;
 			}
@@ -2551,7 +2580,7 @@ int parse_ship_values(ship_info* sip, bool isTemplate, bool first_time, bool rep
 		float tempf[4];
 		float tempf_sum = 0.0f;
 		stuff_float_list(tempf, 4);
-		for (i = 0; i < MAX_SHIELD_SECTIONS; i++) {
+		for (i = 0; i < DEFAULT_SHIELD_SECTIONS; i++) {
 			if (i < sip->num_shield_segments)
 				sip->max_shield_segment_strength[i] = tempf[i];
 			else
@@ -4948,6 +4977,8 @@ void ship::clear()
 	special_hitpoints = 0;
 	special_shield = -1;
 
+	shield_points.clear();
+
 	ship_max_shield_strength = 0.0f;
 	ship_max_hull_strength = 0.0f;
 
@@ -5210,6 +5241,7 @@ void ship_set(int ship_index, int objnum, int ship_type)
 	object		*objp = &Objects[objnum];
 	ship_info	*sip = &(Ship_info[ship_type]);
 	ship_weapon	*swp = &shipp->weapons;
+	polymodel *pm = model_get(sip->model_num);
 
 	extern int oo_arrive_time_count[MAX_SHIPS];		
 	extern int oo_interp_count[MAX_SHIPS];	
@@ -5237,12 +5269,10 @@ void ship_set(int ship_index, int objnum, int ship_type)
 
 	objp->n_shield_segments = sip->num_shield_segments;
 
-	if (Fred_running) {
-		shipp->ship_max_shield_strength = 100.0f;
-		objp->shield_quadrant[0] = 100.0f;
-	} else {
-		shipp->ship_max_shield_strength = sip->max_shield_strength;
-		shield_set_strength(objp, shipp->ship_max_shield_strength);
+	if (sip->flags2 & SIF2_MODEL_POINT_SHIELDS) {
+		objp->n_quadrants = pm->shield_points.size();
+		shipp->shield_points = pm->shield_points;
+		objp->shield_quadrant.resize(objp->n_quadrants);
 	}
 
 	shipp->max_shield_recharge_pct = sip->max_shield_recharge;
@@ -5253,7 +5283,7 @@ void ship_set(int ship_index, int objnum, int ship_type)
 		objp->shield_quadrant[0] = 100.0f;
 	} else {
 		shipp->ship_max_shield_strength = sip->max_shield_strength;
-		for (i = 0;i < MAX_SHIELD_SECTIONS; i++) {
+		for (i = 0;i < DEFAULT_SHIELD_SECTIONS; i++) {
 			shipp->ship_max_shield_segment[i] = sip->max_shield_segment_strength[i];
 			shield_set_quad(objp, i, shipp->ship_max_shield_segment[i] * shipp->max_shield_recharge_pct);
 		}
@@ -5335,8 +5365,6 @@ void ship_set(int ship_index, int objnum, int ship_type)
 	shipp->shield_armor_type_idx = sip->shield_armor_type_idx;
 	shipp->collision_damage_type_idx =  sip->collision_damage_type_idx;
 	shipp->debris_damage_type_idx = sip->debris_damage_type_idx;
-
-	polymodel *pm = model_get(sip->model_num);
 
 	if(pm != NULL && pm->n_view_positions > 0)
 		ship_set_eye(objp, 0);
@@ -9188,10 +9216,12 @@ void ship_model_change(int n, int ship_type)
 	ship_info	*sip;
 	ship			*sp;
 	polymodel * pm;
+	object *objp;
 
 	Assert( n >= 0 && n < MAX_SHIPS );
 	sp = &Ships[n];
 	sip = &(Ship_info[ship_type]);
+	objp = &Objects[sp->objnum];
 
 	// get new model
 	if (sip->model_num == -1) {
@@ -9238,6 +9268,14 @@ void ship_model_change(int n, int ship_type)
 	}	
 	for ( i=0; i<pm->n_detail_levels; i++ )
 		pm->detail_depth[i] = (i < sip->num_detail_levels) ? i2fl(sip->detail_distance[i]) : 0.0f;
+
+	if (sip->flags2 & SIF2_MODEL_POINT_SHIELDS) {
+		objp->n_quadrants = pm->shield_points.size();
+		sp->shield_points = pm->shield_points;
+	} else {
+		objp->n_quadrants = DEFAULT_SHIELD_SECTIONS;
+	}
+	objp->shield_quadrant.resize(objp->n_quadrants);
 
 	if (sp->shield_integrity != NULL) {
 		vm_free(sp->shield_integrity);
@@ -9408,7 +9446,7 @@ void change_ship_type(int n, int ship_type, int by_sexp)
 		// clear the old shield data
 		int i;
 		float shield_mult;
-		for (i=0;i<MAX_SHIELD_SECTIONS; i++) {
+		for (i=0;i<DEFAULT_SHIELD_SECTIONS; i++) {
 			objp->shield_quadrant[i] = 0.0f;
 
 			shield_mult = sp->ship_max_shield_strength / sip->max_shield_strength;

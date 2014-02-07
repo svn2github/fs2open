@@ -429,7 +429,7 @@ public:
 	float ship_max_shield_strength;
 
 	float max_shield_recharge_percent;
-	float max_shield_segment_strength[MAX_SHIELD_SECTIONS];
+	float max_shield_segment_strength[DEFAULT_SHIELD_SECTIONS];
 
 	// Goober5000
 	int num_texture_replacements;

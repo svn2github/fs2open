@@ -1827,7 +1827,7 @@ int parse_create_object_sub(p_object *p_objp)
 	shipp->ship_max_hull_strength =  p_objp->ship_max_hull_strength;
 	shipp->max_shield_recharge_pct = p_objp->max_shield_recharge_percent;
 
-	for (i=0;i<MAX_SHIELD_SECTIONS;i++)
+	for (i=0;i<DEFAULT_SHIELD_SECTIONS;i++)
 		shipp->ship_max_shield_segment[i] = p_objp->max_shield_segment_strength[i];
 
 	// Goober5000 - ugh, this is really stupid having to do this here; if the
@@ -2240,7 +2240,7 @@ int parse_create_object_sub(p_object *p_objp)
 		int max_allowed_sparks, num_sparks, iLoop;
 
 		Objects[objnum].hull_strength = p_objp->initial_hull * shipp->ship_max_hull_strength / 100.0f;
-		for (iLoop = 0; iLoop<Objects[objnum].n_shield_segments; iLoop++)
+		for (iLoop = 0; iLoop<Objects[objnum].n_quadrants; iLoop++)
 		{
 			Objects[objnum].shield_quadrant[iLoop] = (float) (shipp->max_shield_recharge_pct * p_objp->initial_shields * get_max_shield_quad(&Objects[objnum],iLoop) / 100.0f);
 		}
@@ -3085,7 +3085,7 @@ int parse_object(mission *pm, int flag, p_object *p_objp)
 
 	if (Ship_info[p_objp->ship_class].max_shield_strength > 0.0f) {
 		float shield_mult = p_objp->ship_max_shield_strength / Ship_info[p_objp->ship_class].max_shield_strength;
-		for (i = 0; i < MAX_SHIELD_SECTIONS; i++)
+		for (i = 0; i < DEFAULT_SHIELD_SECTIONS; i++)
 			p_objp->max_shield_segment_strength[i] = Ship_info[p_objp->ship_class].max_shield_segment_strength[i] * shield_mult;
 	}
 
@@ -7451,7 +7451,7 @@ void mission_bring_in_support_ship( object *requester_objp )
 	pobj->ship_max_hull_strength = Ship_info[i].max_hull_strength;
 	pobj->ship_max_shield_strength = Ship_info[i].max_shield_strength;
 	pobj->max_shield_recharge_percent = Ship_info[i].max_shield_recharge;
-	for (j = 0; j < MAX_SHIELD_SECTIONS; j++)
+	for (j = 0; j < DEFAULT_SHIELD_SECTIONS; j++)
 		pobj->max_shield_segment_strength[j] = Ship_info[i].max_shield_segment_strength[j];
 
 	pobj->team = requester_shipp->team;

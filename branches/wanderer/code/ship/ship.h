@@ -592,7 +592,7 @@ public:
 	float ship_max_hull_strength;
 	
 	float max_shield_recharge_pct;
-	float ship_max_shield_segment[MAX_SHIELD_SECTIONS];	// defines the per segment maximum shield strengths
+	float ship_max_shield_segment[DEFAULT_SHIELD_SECTIONS];	// defines the per segment maximum shield strengths
 
 	int ship_guardian_threshold;	// Goober5000 - now also determines whether ship is guardian'd
 
@@ -654,6 +654,8 @@ public:
 	ship_weapon	weapons;
 
 	int	shield_hits;						//	Number of hits on shield this frame.
+
+	SCP_vector<vec3d>	shield_points;
 
 	float		wash_intensity;
 	vec3d	wash_rot_axis;
@@ -927,6 +929,7 @@ extern int ship_find_exited_ship_by_signature( int signature);
 #define SIF2_DYN_PRIMARY_LINKING			(1 << 15)	// RSAXVC - Dynamically generate weapon linking options
 #define SIF2_AUTO_SPREAD_SHIELDS			(1 << 16)	// zookeeper - auto spread shields
 #define SIF2_DRAW_WEAPON_MODELS				(1 << 17)	// the ship draws weapon models of any sort (used to be a boolean)
+#define SIF2_MODEL_POINT_SHIELDS			(1 << 18)	// zookeeper - uses model-defined shield points instead of quadrants
 
 #define	SIF_DEFAULT_VALUE		0
 #define SIF2_DEFAULT_VALUE		0
@@ -1298,8 +1301,10 @@ public:
 	bool	auto_shield_spread_bypass;
 	int		auto_shield_spread_from_lod;
 
+	int		shield_point_augment_ctrls[4];	// Re-mapping of shield augmentation controls for model point shields
+
 	float   max_shield_recharge;
-	float	max_shield_segment_strength[MAX_SHIELD_SECTIONS];
+	float	max_shield_segment_strength[DEFAULT_SHIELD_SECTIONS];
 
 	float	hull_repair_rate;				//How much of the hull is repaired every second
 	float	subsys_repair_rate;		//How fast 
@@ -1721,7 +1726,7 @@ extern int ship_query_general_type(int ship);
 extern int ship_class_query_general_type(int ship_class);
 extern int ship_query_general_type(ship *shipp);
 extern int ship_docking_valid(int docker, int dockee);
-extern int get_quadrant(vec3d *hit_pnt, object *objp);						//	Return quadrant num of last hit ponit.
+extern int get_quadrant(vec3d *hit_pnt, object *shipobjp = NULL);	//	Return quadrant num of given hit point.
 
 extern void ship_obj_list_rebuild();	// only called by save/restore code
 extern int ship_query_state(char *name);
