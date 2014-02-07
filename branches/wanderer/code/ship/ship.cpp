@@ -361,6 +361,7 @@ flag_def_list ai_tgt_weapon_flags[] = {
 };
 
 //	Constant for flag,				Name of flag,				In flags or flags2
+//  When adding new flags remember to bump MAX_SHIP_FLAG_NAMES in ship.h
 ship_flag_name Ship_flag_names[] = {
 	{SF_VAPORIZE,					"vaporize",						1,	},
 	{SF_WARP_BROKEN,				"break-warp",					1,	},
@@ -370,6 +371,7 @@ ship_flag_name Ship_flag_names[] = {
 	{SF_HIDDEN_FROM_SENSORS,		"hidden-from-sensors",			1,	},
 	{SF2_STEALTH,					"stealth",						2,	},
 	{SF2_FRIENDLY_STEALTH_INVIS,	"friendly-stealth-invisible",	2,	},
+	{SF2_HIDE_SHIP_NAME,			"hide-ship-name",				2,	},
 	{SF2_AFTERBURNER_LOCKED,		"afterburners-locked",			2,	},
 	{SF2_PRIMARIES_LOCKED,			"primaries-locked",				2,	},
 	{SF2_SECONDARIES_LOCKED,		"secondaries-locked",			2,	},
@@ -664,7 +666,7 @@ void init_ship_entry(ship_info *sip)
 
 	sip->name[0] = '\0';
 	sip->alt_name[0] = '\0';
-	sprintf(sip->short_name, "ShipClass%d", (sip - Ship_info));
+	sprintf(sip->short_name, "ShipClass%d", (int) (sip - Ship_info));
 	sip->species = 0;
 	sip->class_type = -1;
 
@@ -862,6 +864,11 @@ void init_ship_entry(ship_info *sip)
 	sip->auto_shield_spread = 0.0f;
 	sip->auto_shield_spread_bypass = false;
 	sip->auto_shield_spread_from_lod = -1;
+
+	for (i = 0; i < 4; i++)
+	{
+		sip->shield_point_augment_ctrls[i] = -1;
+	}
 
 	sip->hull_repair_rate = 0.0f;
 	//-2 represents not set, in which case the default is used for the ship (if it is small)
@@ -2520,7 +2527,7 @@ int parse_ship_values(ship_info* sip, bool isTemplate, bool first_time, bool rep
 		sip->shield_point_augment_ctrls[LEFT_QUAD] = -1;
 		sip->shield_point_augment_ctrls[RIGHT_QUAD] = -1;
 
-		for (int i = 0; i < num_strings; i++) {
+		for (i = 0; i < num_strings; i++) {
 			const char *str = ctrl_strings[i].c_str();
 
 			if (!stricmp(str, "front"))
@@ -3809,13 +3816,15 @@ int parse_ship_values(ship_info* sip, bool isTemplate, bool first_time, bool rep
 							current_trigger->end = 0;
 					}else{
 
-						required_string("+delay:");
-						stuff_int(&current_trigger->start); 
-
-						current_trigger->reverse_start = -1;	//have some code figure this out for us
+						if(optional_string("+delay:"))
+							stuff_int(&current_trigger->start); 
+						else
+							current_trigger->start = 0;
 
 						if ( optional_string("+reverse_delay:") )
 							stuff_int(&current_trigger->reverse_start);
+						else
+							current_trigger->reverse_start = -1; //have some code figure this out for us
 		
 						if(optional_string("+absolute_angle:")){
 							current_trigger->absolute = true;
@@ -3840,11 +3849,16 @@ int parse_ship_values(ship_info* sip, bool isTemplate, bool first_time, bool rep
 						current_trigger->vel.xyz.y = fl_radians(current_trigger->vel.xyz.y);
 						current_trigger->vel.xyz.z = fl_radians(current_trigger->vel.xyz.z);
 		
-						required_string("+acceleration:");
-						stuff_vec3d(&current_trigger->accel );
-						current_trigger->accel.xyz.x = fl_radians(current_trigger->accel.xyz.x);
-						current_trigger->accel.xyz.y = fl_radians(current_trigger->accel.xyz.y);
-						current_trigger->accel.xyz.z = fl_radians(current_trigger->accel.xyz.z);
+						if (optional_string("+acceleration:")){
+							stuff_vec3d(&current_trigger->accel );
+							current_trigger->accel.xyz.x = fl_radians(current_trigger->accel.xyz.x);
+							current_trigger->accel.xyz.y = fl_radians(current_trigger->accel.xyz.y);
+							current_trigger->accel.xyz.z = fl_radians(current_trigger->accel.xyz.z);
+						} else {
+							current_trigger->accel.xyz.x = 0.0f;
+							current_trigger->accel.xyz.y = 0.0f;
+							current_trigger->accel.xyz.z = 0.0f;
+						}
 
 						if(optional_string("+time:"))
 							stuff_int(&current_trigger->end );
@@ -7108,7 +7122,7 @@ void ship_destroy_instantly(object *ship_obj, int shipnum)
 	Assert(!(ship_obj == Player_obj));
 	Assert(!(Game_mode & GM_MULTIPLAYER));
 
-	// undocking and death preperation
+	// undocking and death preparation
 	ship_stop_fire_primary(ship_obj);
 	ai_deathroll_start(ship_obj);
 
@@ -8936,7 +8950,7 @@ void show_ship_subsys_count()
 	for ( objp = GET_FIRST(&obj_used_list); objp != END_OF_LIST(&obj_used_list); objp = GET_NEXT(objp) ) {
 		o_type = (int)objp->type;
 		if (o_type == OBJ_SHIP) {
-			count += Ship_info[Ships[o_type].ship_info_index].n_subsystems;
+			count += Ship_info[Ships[objp->instance].ship_info_index].n_subsystems;
 		}
 	}
 
@@ -9607,6 +9621,11 @@ void change_ship_type(int n, int ship_type, int by_sexp)
 	else if (sip_orig->flags & SIF_SHIP_CLASS_DONT_COLLIDE_INVIS)	// changing FROM a don't-collide-invisible ship class
 		sp->flags2 &= ~SF2_DONT_COLLIDE_INVIS;
 
+	if (sip->flags & SIF_NO_COLLIDE)								// changing TO a no_collide ship
+		Objects[sp->objnum].flags &= ~OF_COLLIDES;
+	else if (sip_orig->flags & SIF_NO_COLLIDE)						// changing FROM a no_collide ship
+		Objects[sp->objnum].flags |= OF_COLLIDES;
+
 	if (sip->flags2 & SIF2_NO_ETS)
 		sp->flags2 |= SF2_NO_ETS;
 	else if (sip_orig->flags2 & SIF2_NO_ETS)
@@ -10184,10 +10203,6 @@ int ship_fire_primary(object * obj, int stream_weapons, int force)
 			target_position = Objects[aip->target_objnum].pos;
 		}
 
-		target_velocity_vec = Objects[aip->target_objnum].phys_info.vel;
-		if (The_mission.ai_profile->flags & AIPF_USE_ADDITIVE_WEAPON_VELOCITY)
-			vm_vec_sub2(&target_velocity_vec, &obj->phys_info.vel);
-
 		dist_to_target = vm_vec_dist_quick(&target_position, &obj->pos);
 	}
 
@@ -10212,6 +10227,11 @@ int ship_fire_primary(object * obj, int stream_weapons, int force)
 
 		weapon_info* winfo_p = &Weapon_info[weapon];
 
+		if (needs_target_pos) {
+			target_velocity_vec = Objects[aip->target_objnum].phys_info.vel;
+			if (The_mission.ai_profile->flags & AIPF_USE_ADDITIVE_WEAPON_VELOCITY)
+				vm_vec_scale_sub2(&target_velocity_vec, &obj->phys_info.vel, winfo_p->vel_inherit_amount);
+		}
 
 		if(sip->draw_primary_models[bank_to_fire]){
 			if(shipp->primary_rotate_rate[bank_to_fire] < winfo_p->weapon_submodel_rotate_vel)
@@ -10271,11 +10291,11 @@ int ship_fire_primary(object * obj, int stream_weapons, int force)
 		polymodel *pm = model_get( sip->model_num );
 		
 		// Goober5000 (thanks to _argv[-1] for the original idea)
-		if (!(The_mission.ai_profile->flags & AIPF_DISABLE_LINKED_FIRE_PENALTY))
+		if ( !((winfo_p->wi_flags3 & WIF3_NO_LINKED_PENALTY) || (The_mission.ai_profile->flags & AIPF_DISABLE_LINKED_FIRE_PENALTY)) )
 		{
 			int effective_primary_banks = 0;
 			for (int it = 0; it < num_primary_banks; it++)
-				if (Weapon_info[swp->primary_bank_weapons[it]].wi_flags3 & WIF3_NOLINK)
+				if (Weapon_info[swp->primary_bank_weapons[it]].wi_flags3 & (WIF3_NOLINK | WIF3_NO_LINKED_PENALTY))
 					continue;
 				else
 					effective_primary_banks++;
@@ -11089,7 +11109,7 @@ extern void ai_maybe_announce_shockwave_weapon(object *firing_objp, int weapon_i
 //                need to avoid firing when normally called
 int ship_fire_secondary( object *obj, int allow_swarm )
 {
-	int			n, weapon, j, bank, starting_bank_count = -1, num_fired;
+	int			n, weapon, j, bank, bank_adjusted, starting_bank_count = -1, num_fired;
 	ushort		starting_sig = 0;
 	ship			*shipp;
 	ship_weapon *swp;
@@ -11158,9 +11178,10 @@ int ship_fire_secondary( object *obj, int allow_swarm )
 		bank = swp->current_secondary_bank;
 	}
 
-	if ( bank < 0 || bank > sip->num_secondary_banks ) {
+	if ( bank < 0 || bank >= sip->num_secondary_banks ) {
 		return 0;
 	}
+	bank_adjusted = MAX_SHIP_PRIMARY_BANKS + bank;
 
 	if (swp->secondary_animation_position[bank] == MA_POS_SET) {
 		if ( timestamp_elapsed(swp->secondary_animation_done_time[bank]) )
@@ -11295,12 +11316,12 @@ int ship_fire_secondary( object *obj, int allow_swarm )
 
 	float t;
 
-	if (Weapon_info[weapon].burst_shots > swp->burst_counter[bank]) {
+	if (Weapon_info[weapon].burst_shots > swp->burst_counter[bank_adjusted]) {
 		t = Weapon_info[weapon].burst_delay;
-		swp->burst_counter[bank]++;
+		swp->burst_counter[bank_adjusted]++;
 	} else {
 		t = Weapon_info[weapon].fire_wait;	// They can fire 5 times a second
-		swp->burst_counter[bank] = 0;
+		swp->burst_counter[bank_adjusted] = 0;
 	}
 	swp->next_secondary_fire_stamp[bank] = timestamp((int) (t * 1000.0f));
 	swp->last_secondary_fire_stamp[bank] = timestamp();
@@ -11969,10 +11990,27 @@ int get_available_secondary_weapons(object *objp, int *outlist, int *outbanklist
 	return count;
 }
 
+void wing_bash_ship_name(char *ship_name, const char *wing_name, int index)
+{
+	// if wing name has a hash symbol, create the ship name a particular way
+	// (but don't do this for names that have the hash as the first or last character)
+	const char *p = get_pointer_to_first_hash_symbol(wing_name);
+	if ((p != NULL) && (p != wing_name) && (*(p+1) != '\0'))
+	{
+		size_t len = (p - wing_name);
+		strncpy(ship_name, wing_name, len);
+		sprintf(ship_name + len, NOX(" %d"), index);
+		strcat(ship_name, p);
+	}
+	// most of the time we should create the name the standard retail way
+	else
+		sprintf(ship_name, NOX("%s %d"), wing_name, index);
+}
+
 /**
  * Return the object index of the ship with name *name.
  */
-int wing_name_lookup(char *name, int ignore_count)
+int wing_name_lookup(const char *name, int ignore_count)
 {
 	int i, wing_limit;
 
@@ -12002,7 +12040,7 @@ int wing_name_lookup(char *name, int ignore_count)
  * Needed in addition to wing_name_lookup because it does a straight lookup without
  * caring about how many ships are in the wing, etc.
  */
-int wing_lookup(char *name)
+int wing_lookup(const char *name)
 {
    int idx;
 	for(idx=0;idx<Num_wings;idx++)
@@ -12015,7 +12053,7 @@ int wing_lookup(char *name)
 /**
  * Return the index of Ship_info[].name that is *token.
  */
-int ship_info_lookup_sub(char *token)
+int ship_info_lookup_sub(const char *token)
 {
 	int	i;
 
@@ -12029,7 +12067,7 @@ int ship_info_lookup_sub(char *token)
 /**
  * Return the index of Ship_templates[].name that is *token.
  */
-int ship_template_lookup(char *token)
+int ship_template_lookup(const char *token)
 {
 	int	i;
 
@@ -12042,10 +12080,10 @@ int ship_template_lookup(char *token)
 }
 
 // Goober5000
-int ship_info_lookup(char *token)
+int ship_info_lookup(const char *token)
 {
 	int idx;
-	char *p;
+	const char *p;
 	char name[NAME_LENGTH], temp1[NAME_LENGTH], temp2[NAME_LENGTH];
 
 	// bogus
@@ -12157,7 +12195,7 @@ int ship_info_lookup(char *token)
 /**
  * Return the ship index of the ship with name *name.
  */
-int ship_name_lookup(char *name, int inc_players)
+int ship_name_lookup(const char *name, int inc_players)
 {
 	int	i;
 
@@ -12180,7 +12218,7 @@ int ship_name_lookup(char *name, int inc_players)
 	return -1;
 }
 
-int ship_type_name_lookup(char *name)
+int ship_type_name_lookup(const char *name)
 {
 	// bogus
 	if(name == NULL || !strlen(name)){
@@ -16781,32 +16819,29 @@ int ship_has_dock_bay(int shipnum)
 // get first ship in ship list with docking bay
 int ship_get_ship_with_dock_bay(int team)
 {
-	int ship_with_bay = -1;
-	ship_obj *so;
-
-	so = GET_FIRST(&Ship_obj_list);
-	while(so != END_OF_LIST(&Ship_obj_list))
+	for (ship_obj *so = GET_FIRST(&Ship_obj_list); so != END_OF_LIST(&Ship_obj_list); so = GET_NEXT(so))
 	{
-		if ( ship_has_dock_bay(Objects[so->objnum].instance) && (Ships[Objects[so->objnum].instance].team == team) )
-		{
-			ship_with_bay = Objects[so->objnum].instance;
+		Assert(so->objnum >= 0);
+		int shipnum = Objects[so->objnum].instance;
+		Assert(shipnum >= 0);
 
+		if ( ship_has_dock_bay(shipnum) && (Ships[shipnum].team == team) )
+		{
 			// make sure not dying or departing
-			if (Ships[ship_with_bay].flags & (SF_DYING | SF_DEPARTING))
-				ship_with_bay = -1;
+			if (Ships[shipnum].flags & (SF_DYING | SF_DEPARTING))
+				continue;
 
 			// also make sure that the bays are not all destroyed
-			if (ship_fighterbays_all_destroyed(&Ships[ship_with_bay]))
-				ship_with_bay = -1;
+			if (ship_fighterbays_all_destroyed(&Ships[shipnum]))
+				continue;
 
-			if (ship_with_bay >= 0)
-				break;
+			// this ship suits our purposes
+			return shipnum;
 		}
-		so = GET_NEXT(so);
 	}
 
-	// return whatever we got
-	return ship_with_bay;
+	// we didn't find anything
+	return -1;
 }
 
 // Goober5000 - check if all fighterbays on a ship have been destroyed
@@ -16940,7 +16975,7 @@ int ship_has_engine_power(ship *shipp)
 }
 
 // Goober5000
-int ship_starting_wing_lookup(char *wing_name)
+int ship_starting_wing_lookup(const char *wing_name)
 {
 	for (int i = 0; i < MAX_STARTING_WINGS; i++)
 	{
@@ -16952,7 +16987,7 @@ int ship_starting_wing_lookup(char *wing_name)
 }
 
 // Goober5000
-int ship_squadron_wing_lookup(char *wing_name)
+int ship_squadron_wing_lookup(const char *wing_name)
 {
 	// TvT uses a different set of wing names from everything else
 	if (MULTI_TEAM)
@@ -16976,7 +17011,7 @@ int ship_squadron_wing_lookup(char *wing_name)
 }
 
 // Goober5000
-int ship_tvt_wing_lookup(char *wing_name)
+int ship_tvt_wing_lookup(const char *wing_name)
 {
 	for (int i = 0; i < MAX_TVT_WINGS; i++)
 	{
@@ -17863,6 +17898,7 @@ ai_target_priority init_ai_target_priorities()
 	temp_priority.weapon_class.clear();
 	temp_priority.wif2_flags = 0;
 	temp_priority.wif_flags = 0;
+	temp_priority.name[0] = '\0';
 
 	//return the initialized
 	return temp_priority;

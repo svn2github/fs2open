@@ -1018,13 +1018,8 @@ void hud_init_homing_beep()
 	Homing_beep.precalced_interp = (Homing_beep.max_cycle_dist-Homing_beep.min_cycle_dist) / (Homing_beep.max_cycle_time - Homing_beep.min_cycle_time );
 }
 
-// hud_init_targeting() will set the current target to point to the dummy node
-// in the object used list
-//
-void hud_init_targeting()
+void hud_init_ballistic_index()
 {
-	Assert(Player_ai != NULL);
-
 	int i;
 
 	// decide whether to realign HUD for ballistic primaries
@@ -1037,6 +1032,14 @@ void hud_init_targeting()
 			break;
 		}
 	}
+}
+
+// hud_init_targeting() will set the current target to point to the dummy node
+// in the object used list
+//
+void hud_init_targeting()
+{
+	Assert(Player_ai != NULL);
 
 	// make sure there is no current target
 	set_target_objnum( Player_ai, -1 );
@@ -3687,7 +3690,7 @@ void hud_calculate_lead_pos(vec3d *lead_target_pos, vec3d *target_pos, object *t
 	target_moving_direction = targetp->phys_info.vel;
 
 	if(The_mission.ai_profile->flags & AIPF_USE_ADDITIVE_WEAPON_VELOCITY)
-		vm_vec_sub2(&target_moving_direction, &Player_obj->phys_info.vel);
+		vm_vec_scale_sub2(&target_moving_direction, &Player_obj->phys_info.vel, wip->vel_inherit_amount);
 	
 	// test if the target is moving at all
 	if ( vm_vec_mag_quick(&target_moving_direction) < 0.1f ) { // Find distance!
@@ -3780,7 +3783,7 @@ void polish_predicted_target_pos(weapon_info *wip, object *targetp, vec3d *enemy
 	// not just the player's main target
 	vec3d enemy_vel = targetp->phys_info.vel;
 	if (The_mission.ai_profile->flags & AIPF_USE_ADDITIVE_WEAPON_VELOCITY) {
-		vm_vec_sub2( &enemy_vel, &Player_obj->phys_info.vel );
+		vm_vec_scale_sub2( &enemy_vel, &Player_obj->phys_info.vel, wip->vel_inherit_amount);
 	}
 	
 	for (iteration=0; iteration < num_polish_steps; iteration++) {
@@ -4005,7 +4008,7 @@ void HudGaugeLeadIndicator::renderLeadCurrentTarget()
 
 	srange = ship_get_secondary_weapon_range(Player_ship);
 
-	if ( swp->current_secondary_bank >= 0 )
+	if ( (swp->current_secondary_bank >= 0) && (swp->secondary_bank_weapons[swp->current_secondary_bank] >= 0) )
 	{
 		int bank = swp->current_secondary_bank;
 		tmp = &Weapon_info[swp->secondary_bank_weapons[bank]];
@@ -4025,7 +4028,7 @@ void HudGaugeLeadIndicator::renderLeadCurrentTarget()
 
 	//do dumbfire lead indicator - color is orange (255,128,0) - bright, (192,96,0) - dim
 	//phreak changed 9/01/02
-	if(swp->current_secondary_bank>=0) {
+	if((swp->current_secondary_bank>=0) && (swp->secondary_bank_weapons[swp->current_secondary_bank] >= 0)) {
 		int bank=swp->current_secondary_bank;
 		wip=&Weapon_info[swp->secondary_bank_weapons[bank]];
 
@@ -4282,7 +4285,7 @@ void HudGaugeLeadSight::render(float frametime)
 
 	srange = ship_get_secondary_weapon_range(Player_ship);
 
-	if ( swp->current_secondary_bank >= 0 ) {
+	if ( (swp->current_secondary_bank >= 0) && (swp->secondary_bank_weapons[swp->current_secondary_bank] >= 0) ) {
 		int bank = swp->current_secondary_bank;
 		tmp = &Weapon_info[swp->secondary_bank_weapons[bank]];
 		if ( !(tmp->wi_flags & WIF_HOMING) && !(tmp->wi_flags & WIF_LOCKED_HOMING && Player->target_in_lock_cone) ) {
@@ -4309,7 +4312,7 @@ void HudGaugeLeadSight::render(float frametime)
 
 	//do dumbfire lead indicator - color is orange (255,128,0) - bright, (192,96,0) - dim
 	//phreak changed 9/01/02
-	if(swp->current_secondary_bank>=0)
+	if((swp->current_secondary_bank>=0) && (swp->secondary_bank_weapons[swp->current_secondary_bank] >= 0))
 	{
 		int bank=swp->current_secondary_bank;
 		wip=&Weapon_info[swp->secondary_bank_weapons[bank]];
@@ -4440,7 +4443,9 @@ void hud_target_change_check()
 		}
 
 		player_stop_cargo_scan_sound();
-		hud_shield_hit_reset(&Objects[Player_ai->target_objnum]);
+		if ( (Player_ai->target_objnum >= 0) && (Player_ai->target_objnum < MAX_OBJECTS) ) {
+			hud_shield_hit_reset(&Objects[Player_ai->target_objnum]);
+		}
 		hud_targetbox_init_flash();
 		hud_targetbox_start_flash(TBOX_FLASH_NAME);
 		hud_gauge_popup_start(HUD_TARGET_MINI_ICON);
@@ -4454,7 +4459,6 @@ void hud_target_change_check()
 
 		if ( Players[Player_num].flags & PLAYER_FLAGS_AUTO_MATCH_SPEED ) {
 			Players[Player_num].flags &= ~PLAYER_FLAGS_MATCH_TARGET;
-//			player_match_target_speed("", "", XSTR("Matching speed of newly acquired target",-1));
 			player_match_target_speed();
 		}
 		else {
@@ -4464,7 +4468,7 @@ void hud_target_change_check()
 
 		hud_lock_reset();
 
-		if ( Player_ai->target_objnum != -1) {
+		if ( (Player_ai->target_objnum >= 0) && (Player_ai->target_objnum < MAX_OBJECTS) ) {
 			if ( Objects[Player_ai->target_objnum].type == OBJ_SHIP ) {
 				hud_restore_subsystem_target(&Ships[Objects[Player_ai->target_objnum].instance]);
 			}
@@ -4493,7 +4497,6 @@ void hud_target_change_check()
 
 		if ( Players[Player_num].flags & PLAYER_FLAGS_AUTO_MATCH_SPEED ) {
 			if ( !(Players[Player_num].flags & PLAYER_FLAGS_MATCH_TARGET) ) {
-//				player_match_target_speed("", "", XSTR("Matching target speed",-1));
 				player_match_target_speed();
 			}
 		}
@@ -4607,7 +4610,6 @@ int hud_sensors_ok(ship *sp, int show_msg)
 	}
 }
 
-extern bool Sexp_Messages_Scrambled;
 int hud_communications_state(ship *sp)
 {
 	float str;
@@ -4623,7 +4625,7 @@ int hud_communications_state(ship *sp)
 		return COMM_OK;
 
 	// Goober5000 - check for scrambled communications
-	if ( Sexp_Messages_Scrambled || emp_active_local() )
+	if ( emp_active_local() || sp->flags2 & SF2_SCRAMBLE_MESSAGES )
 		return COMM_SCRAMBLED;
 
 	str = ship_get_subsystem_strength( sp, SUBSYSTEM_COMMUNICATION );

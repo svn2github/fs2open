@@ -5863,8 +5863,8 @@ void ai_select_secondary_weapon(object *objp, ship_weapon *swp, int priority1 = 
 				int ignore_mask_to_use = ((aip->ai_profile_flags & AIPF_SMART_SECONDARY_WEAPON_SELECTION) && (wi_flags & WIF_BOMBER_PLUS)) ? ignore_mask_without_huge : ignore_mask;
 
 				if (!(wi_flags & ignore_mask_to_use)) {					//	Maybe bombs are illegal.
-					if (swp->secondary_bank_ammo[i] > 0) {
-						swp->current_secondary_bank = i;
+					if (swp->secondary_bank_ammo[weapon_bank_list[i]] > 0) {
+						swp->current_secondary_bank = weapon_bank_list[i];
 						break;
 					}
 				}
@@ -6013,6 +6013,11 @@ int check_ok_to_fire(int objnum, int target_objnum, weapon_info *wip)
 				}
 			}
 		}
+	}
+	else
+	{
+		// We have no valid target object, we should not fire at it...
+		return 0;
 	}
 
 	return 1;
@@ -6290,6 +6295,23 @@ float ai_get_weapon_speed(ship_weapon *swp)
 	return Weapon_info[weapon_num].max_speed;
 }
 
+weapon_info* ai_get_weapon(ship_weapon *swp)
+{
+	int	bank_num, weapon_num;
+
+	bank_num = swp->current_primary_bank;
+	if (bank_num < 0)
+		return NULL;
+
+	weapon_num = swp->primary_bank_weapons[bank_num];
+
+	if (weapon_num == -1) {
+		return NULL;
+	}
+
+	return &Weapon_info[weapon_num];
+}
+
 //	Compute the predicted position of a ship to be fired upon from a turret.
 //	This is based on position of firing gun, enemy object, weapon speed and skill level constraints.
 //	Return value in *predicted_enemy_pos.
@@ -6353,17 +6375,23 @@ void set_predicted_enemy_pos(vec3d *predicted_enemy_pos, object *pobjp, vec3d *e
 {
 	float	weapon_speed, range_time;
 	ship	*shipp = &Ships[pobjp->instance];
+	weapon_info *wip;
 	vec3d	target_moving_direction;
 
 	Assert( enemy_pos != NULL );
 	Assert( enemy_vel != NULL );
 
+	wip = ai_get_weapon(&shipp->weapons);
 	target_moving_direction = *enemy_vel;
 
-	if (The_mission.ai_profile->flags & AIPF_USE_ADDITIVE_WEAPON_VELOCITY)
-		vm_vec_sub2(&target_moving_direction, &pobjp->phys_info.vel);
+	if (wip != NULL && The_mission.ai_profile->flags & AIPF_USE_ADDITIVE_WEAPON_VELOCITY)
+		vm_vec_scale_sub2(&target_moving_direction, &pobjp->phys_info.vel, wip->vel_inherit_amount);
 
-	weapon_speed = ai_get_weapon_speed(&shipp->weapons);
+	if (wip != NULL)
+		weapon_speed = wip->max_speed;
+	else
+		weapon_speed = 100.0f;
+
 	weapon_speed = MAX(weapon_speed, 1.0f);		// set not less than 1
 
 	range_time = 2.0f;
@@ -8791,29 +8819,30 @@ void ai_chase()
 										if (ai_fire_secondary_weapon(Pl_objp)) {
 											//	Only if weapon was fired do we specify time until next fire.  If not fired, done in ai_fire_secondary...
 											float t;
+											int current_bank_adjusted = MAX_SHIP_PRIMARY_BANKS + current_bank;
 											
 											if ((aip->ai_flags & AIF_UNLOAD_SECONDARIES) || (swip->burst_flags & WBF_FAST_FIRING)) {
-												if (swip->burst_shots > swp->burst_counter[current_bank]) {
+												if (swip->burst_shots > swp->burst_counter[current_bank_adjusted]) {
 													t = swip->burst_delay;
-													swp->burst_counter[current_bank]++;
+													swp->burst_counter[current_bank_adjusted]++;
 												} else {
 													t = swip->fire_wait;
 													if ((swip->burst_shots > 0) && (swip->burst_flags & WBF_RANDOM_LENGTH)) {
-														swp->burst_counter[current_bank] = myrand() % swip->burst_shots;
+														swp->burst_counter[current_bank_adjusted] = myrand() % swip->burst_shots;
 													} else {
-														swp->burst_counter[current_bank] = 0;
+														swp->burst_counter[current_bank_adjusted] = 0;
 													}
 												}
 											} else {
-												if (swip->burst_shots > swp->burst_counter[current_bank]) {
+												if (swip->burst_shots > swp->burst_counter[current_bank_adjusted]) {
 													t = set_secondary_fire_delay(aip, temp_shipp, swip, true);
-													swp->burst_counter[current_bank]++;
+													swp->burst_counter[current_bank_adjusted]++;
 												} else {
 													t = set_secondary_fire_delay(aip, temp_shipp, swip, false);
 													if ((swip->burst_shots > 0) && (swip->burst_flags & WBF_RANDOM_LENGTH)) {
-														swp->burst_counter[current_bank] = myrand() % swip->burst_shots;
+														swp->burst_counter[current_bank_adjusted] = myrand() % swip->burst_shots;
 													} else {
-														swp->burst_counter[current_bank] = 0;
+														swp->burst_counter[current_bank_adjusted] = 0;
 													}
 												}
 											}
@@ -10154,8 +10183,10 @@ void ai_do_objects_repairing_stuff( object *repaired_objp, object *repair_objp, 
 
 	if(Game_mode & GM_MULTIPLAYER){
 		p_index = multi_find_player_by_object(repaired_objp);
-		p_team = Net_players[p_index].p_info.team;
-	} else {		
+		if (p_index >= 0) {
+			p_team = Net_players[p_index].p_info.team;
+		}
+	} else {
 		if(repaired_objp == Player_obj){
 			p_index = Player_num;
 		}

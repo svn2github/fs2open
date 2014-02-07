@@ -180,6 +180,7 @@ sexp_oper Operators[] = {
 	//Objectives Category
 	{ "is-destroyed",					OP_IS_DESTROYED,						1,	INT_MAX,	SEXP_BOOLEAN_OPERATOR,	},
 	{ "is-destroyed-delay",				OP_IS_DESTROYED_DELAY,					2,	INT_MAX,	SEXP_BOOLEAN_OPERATOR,	},
+	{ "was-destroyed-by-delay",			OP_WAS_DESTROYED_BY_DELAY,				3,	INT_MAX,	SEXP_BOOLEAN_OPERATOR,  },
 	{ "is-subsystem-destroyed",			OP_IS_SUBSYSTEM_DESTROYED,				2,	2,			SEXP_BOOLEAN_OPERATOR,	},
 	{ "is-subsystem-destroyed-delay",	OP_IS_SUBSYSTEM_DESTROYED_DELAY,		3,	3,			SEXP_BOOLEAN_OPERATOR,	},
 	{ "is-disabled",					OP_IS_DISABLED,							1,	INT_MAX,	SEXP_BOOLEAN_OPERATOR,	},
@@ -343,8 +344,8 @@ sexp_oper Operators[] = {
 	{ "send-message",					OP_SEND_MESSAGE,						3,	3,			SEXP_ACTION_OPERATOR,	},
 	{ "send-message-list",				OP_SEND_MESSAGE_LIST,					4,	INT_MAX,	SEXP_ACTION_OPERATOR,	},
 	{ "send-random-message",			OP_SEND_RANDOM_MESSAGE,					3,	INT_MAX,	SEXP_ACTION_OPERATOR,	},
-	{ "scramble-messages",				OP_SCRAMBLE_MESSAGES,					0,	0,			SEXP_ACTION_OPERATOR,	},
-	{ "unscramble-messages",			OP_UNSCRAMBLE_MESSAGES,					0,	0,			SEXP_ACTION_OPERATOR,	},
+	{ "scramble-messages",				OP_SCRAMBLE_MESSAGES,					0,	INT_MAX,	SEXP_ACTION_OPERATOR,	},
+	{ "unscramble-messages",			OP_UNSCRAMBLE_MESSAGES,					0,	INT_MAX,	SEXP_ACTION_OPERATOR,	},
 	{ "disable-builtin-messages",		OP_DISABLE_BUILTIN_MESSAGES,			0,	INT_MAX,	SEXP_ACTION_OPERATOR,	},	// Karajorma
 	{ "enable-builtin-messages",		OP_ENABLE_BUILTIN_MESSAGES,				0,	INT_MAX,	SEXP_ACTION_OPERATOR,	},	// Karajorma
 	{ "set-persona",					OP_SET_PERSONA,							2,	INT_MAX,	SEXP_ACTION_OPERATOR,	},	// Karajorma
@@ -657,6 +658,7 @@ sexp_oper Operators[] = {
 	{ "remove-weapons",					OP_REMOVE_WEAPONS,						0,	1,			SEXP_ACTION_OPERATOR,	},	// Karajorma
 	{ "set-time-compression",			OP_CUTSCENES_SET_TIME_COMPRESSION,		1,	3,			SEXP_ACTION_OPERATOR,	},
 	{ "reset-time-compression",			OP_CUTSCENES_RESET_TIME_COMPRESSION,	0,	0,			SEXP_ACTION_OPERATOR,	},
+	{ "call-ssm-strike",				OP_CALL_SSM_STRIKE,						3,	INT_MAX,	SEXP_ACTION_OPERATOR,	},	// X3N0-Life-Form
 
 	//Variable Category
 	{ "modify-variable",				OP_MODIFY_VARIABLE,						2,	2,			SEXP_ACTION_OPERATOR,	},
@@ -5117,6 +5119,77 @@ int sexp_is_destroyed_delay(int n)
 	return SEXP_FALSE;
 }
 
+
+// First ship is the destroyer, rest of the arguments are the destroyed ships.
+int sexp_was_destroyed_by(int n, fix* latest_time)
+{
+	char* destroyer_ship_name;
+	char* destroyed_ship_name;
+	int count = 0, num_destroyed;
+	fix time;
+
+	Assert(n != -1);
+
+	destroyer_ship_name = CTEXT(n);
+
+	num_destroyed = 0;
+
+	for (n = CDR(n); n != -1; n = CDR(n))
+	{
+		count++;
+		destroyed_ship_name = CTEXT(n);
+
+		if (sexp_query_has_yet_to_arrive(destroyed_ship_name))
+			return SEXP_CANT_EVAL;
+
+		// check to see if this ship/wing has departed.  If so, then function is known false
+		if (mission_log_get_time(LOG_SHIP_DEPARTED, destroyed_ship_name, NULL, NULL))
+			return SEXP_KNOWN_FALSE;
+
+		// check the mission log.  If ship/wing not destroyed, immediately return SEXP_FALSE.
+		if (mission_log_get_time(LOG_SHIP_DESTROYED, destroyed_ship_name, destroyer_ship_name, &time))
+		{
+			num_destroyed++;
+			if (latest_time && (time > *latest_time))
+				*latest_time = time;
+		}
+	}
+
+	if (count == num_destroyed)
+		return SEXP_KNOWN_TRUE;
+	else
+		return SEXP_FALSE;
+}
+
+int sexp_was_destroyed_by_delay(int n)
+{
+	fix delay, time;
+	int val;
+
+	Assert(n >= 0);
+
+	time = 0;
+
+	delay = i2f(eval_num(n));
+
+	// check value of is_destroyed function.  KNOWN_FALSE should be returned immediately
+	val = sexp_was_destroyed_by(CDR(n), &time);
+	if (val == SEXP_KNOWN_FALSE)
+		return val;
+
+	if (val == SEXP_CANT_EVAL)
+		return SEXP_CANT_EVAL;
+
+	if (val)
+	{
+
+		if ((Missiontime - time) >= delay)
+			return SEXP_KNOWN_TRUE;
+	}
+
+	return SEXP_FALSE;
+}
+
 int sexp_is_subsystem_destroyed_delay(int n)
 {
 	char *ship_name, *subsys_name;
@@ -9490,8 +9563,10 @@ void sexp_clear_ship_goals(int n)
 
 	Assert ( n >= 0 );
 	ship_name = CTEXT(n);
-	num = ship_name_lookup(ship_name, 1);	// Goober5000 - include players
-	ai_clear_ship_goals( &(Ai_info[Ships[num].ai_index]) );
+	if ( (num = ship_name_lookup(ship_name, 1)) != -1) 	// Goober5000 - include players
+	{
+		ai_clear_ship_goals( &(Ai_info[Ships[num].ai_index]) );
+	}
 }
 
 /**
@@ -12073,7 +12148,10 @@ void sexp_change_player_score(int node)
 	node = CDR(node);
 
 	if(!(Game_mode & GM_MULTIPLAYER)){
-		sindex = ship_name_lookup(CTEXT(node));
+		if ( (sindex = ship_name_lookup(CTEXT(node))) == -1) {
+			Warning(LOCATION, "Invalid shipname '%s' passed to sexp_change_player_score!", CTEXT(node));
+			return;
+		}
 
 		if (Player_ship != &Ships[sindex]) {
 			Warning(LOCATION, "Can not award points to '%s'. Ship is not a player!", CTEXT(node));
@@ -13322,7 +13400,7 @@ int sexp_previous_goal_status( int n, int status )
 
 		if ( i == -1 ) {
 			// if mission not found, assume that goal was false (so previous-goal-false returns true)
-			nprintf(("General", "Couldn't find mission name %s in current campaign's list of missions.\nReturning %s for goal-status function.", mission_name, (status==GOAL_COMPLETE)?"false":"true"));
+			nprintf(("General", "Couldn't find mission name \"%s\" in current campaign's list of missions.\nReturning %s for goal-status function.", mission_name, (status==GOAL_COMPLETE)?"false":"true"));
 			if ( status == GOAL_COMPLETE )
 				rval = SEXP_KNOWN_FALSE;
 			else
@@ -13340,7 +13418,7 @@ int sexp_previous_goal_status( int n, int status )
 			}
 
 			if ( i == Campaign.missions[mission_num].num_goals ) {
-				Warning(LOCATION, "Couldn't find goal name %s in mission %s.\nReturning %s for goal-true function.", goal_name, mission_name, (status==GOAL_COMPLETE)?"false":"true");
+				Warning(LOCATION, "Couldn't find goal name \"%s\" in mission %s.\nReturning %s for goal-true function.", goal_name, mission_name, (status==GOAL_COMPLETE)?"false":"true");
 				if ( status == GOAL_COMPLETE )
 					rval = SEXP_KNOWN_FALSE;
 				else
@@ -13401,7 +13479,7 @@ int sexp_previous_event_status( int n, int status )
 
 		// if the mission name wasn't found -- make this return FALSE for the event status.
 		if ( i == -1 ) {
-			nprintf(("General", "Couldn't find mission name %s in current campaign's list of missions.\nReturning %s for event-status function.", mission_name, (status==EVENT_SATISFIED)?"false":"true"));
+			nprintf(("General", "Couldn't find mission name \"%s\" in current campaign's list of missions.\nReturning %s for event-status function.", mission_name, (status==EVENT_SATISFIED)?"false":"true"));
 			if ( status == EVENT_SATISFIED ) {
 				rval = SEXP_KNOWN_FALSE;
 			} else {
@@ -13420,7 +13498,7 @@ int sexp_previous_event_status( int n, int status )
 			}
 
 			if ( i == Campaign.missions[mission_num].num_events ) {
-				Warning(LOCATION, "Couldn't find event name %s in mission %s.\nReturning %s for event_status function.", name, mission_name, (status==EVENT_SATISFIED)?"false":"true");
+				Warning(LOCATION, "Couldn't find event name \"%s\" in mission %s.\nReturning %s for event_status function.", name, mission_name, (status==EVENT_SATISFIED)?"false":"true");
 				if ( status == EVENT_SATISFIED )
 					rval = SEXP_KNOWN_FALSE;
 				else
@@ -14598,7 +14676,7 @@ void sexp_set_death_message(int n)
 	// but use an actual message if one exists
 	for (i=0; i<Num_messages; i++)
 	{
-		if (!stricmp(Messages[i].name, CTEXT(n)))
+		if (!stricmp(Messages[i].name, Player->death_message.c_str()))
 		{
 			Player->death_message = Messages[i].message;
 			break;
@@ -14616,7 +14694,7 @@ int sexp_key_pressed(int node)
 	int z, t;
 
 	Assert(node != -1);
-	z = translate_key_to_index(CTEXT(node));
+	z = translate_key_to_index(CTEXT(node), false);
 	if (z < 0){
 		return SEXP_FALSE;
 	}
@@ -14639,7 +14717,7 @@ void sexp_key_reset(int node)
 
 	for (n = node; n != -1; n = CDR(n))
 	{
-		z = translate_key_to_index(CTEXT(n));
+		z = translate_key_to_index(CTEXT(n), false);
 		if (z >= 0)
 			Control_config[z].used = 0;
 	}
@@ -14659,7 +14737,7 @@ void sexp_ignore_key(int node)
 	node = CDR(node);
 	while (node > -1) {
 		// get the key
-		ignored_key = translate_key_to_index(CTEXT(node));
+		ignored_key = translate_key_to_index(CTEXT(node), false);
 
 		if (ignored_key > -1) {
 			Ignored_keys[ignored_key] = ignore_count;
@@ -16101,7 +16179,7 @@ void ship_copy_damage(ship *target_shipp, ship *source_shipp)
 	}
 }
 
-int insert_subsys_status(p_object *pobjp);
+extern int insert_subsys_status(p_object *pobjp);
 
 // Goober5000
 void parse_copy_damage(p_object *target_pobjp, ship *source_shipp)
@@ -17731,7 +17809,10 @@ void sexp_damage_escort_list(int node)
 
 		if (current_hull_pct < smallest_hull_pct)
 		{
-			Ships[small_shipnum].escort_priority=priority2;		//give the previous smallest the lower priority
+			if (small_shipnum != -1) // avoid negative array index during 1st loop iteration
+			{
+				Ships[small_shipnum].escort_priority=priority2;		//give the previous smallest the lower priority
+			}
 			
 			smallest_hull_pct=current_hull_pct;
 			small_shipnum=shipnum;
@@ -19754,10 +19835,19 @@ void sexp_set_training_context_speed(int node)
 	Training_context_speed_set = 0;
 }
 
-bool Sexp_Messages_Scrambled = false;
-void sexp_scramble_messages(bool scramble)
+void sexp_scramble_messages(int node, bool scramble)
 {
-	Sexp_Messages_Scrambled = scramble;
+	if (node < 0)
+	{
+		// scramble messages on player ship... this isn't multi compatible, but neither was the old version of the sexp
+		if (scramble)
+			Player_ship->flags2 |= SF2_SCRAMBLE_MESSAGES;
+		else
+			Player_ship->flags2 &= ~SF2_SCRAMBLE_MESSAGES;
+		return;
+	}
+
+	sexp_deal_with_ship_flag(node, true, 0, 0, 0, SF2_SCRAMBLE_MESSAGES, 0, P2_SF2_SCRAMBLE_MESSAGES, scramble, false, true);
 }
 
 void toggle_cutscene_bars(float delta_speed, int set) 
@@ -20627,7 +20717,7 @@ void sexp_show_subtitle_text(int node)
 	// but use an actual message if one exists
 	for (i=0; i<Num_messages; i++)
 	{
-		if (!stricmp(Messages[i].name, CTEXT(n)))
+		if (!stricmp(Messages[i].name, buffer))
 		{
 			buffer = Messages[i].message;
 			break;
@@ -21525,6 +21615,26 @@ void multi_sexp_change_team_color() {
 	}
 }
 
+void sexp_call_ssm_strike(int node) {
+	int ssm_index = eval_num(node);
+	node = CDR(node);
+	int calling_team = iff_lookup(CTEXT(node));
+	if (ssm_index < 0 || calling_team < 0)
+		return;
+
+	for (int n = node; n != -1; n = CDR(n)) {
+		int ship_num = ship_name_lookup(CTEXT(n));
+		// don't do anything if the ship isn't there
+		if (ship_num >= 0) {
+			int obj_num = Ships[ship_num].objnum;
+			object *target_ship = &Objects[obj_num];
+			vec3d *start = &target_ship->pos; 
+
+			ssm_create(target_ship, start, ssm_index, NULL, calling_team);
+		}
+	}
+}
+
 extern int Cheats_enabled;
 int sexp_player_is_cheating_bastard() {
 	if (Cheats_enabled) {
@@ -21675,7 +21785,7 @@ void maybe_write_to_event_log(int result)
 	char buffer [256]; 
 
 	int mask = generate_event_log_flags_mask(result); 
-	sprintf(buffer, "%s at mission time %d seconds (%d milliseconds)", Mission_events[Event_index].name, f2i(Missiontime), f2i((longlong)Missiontime * 1000));
+	sprintf(buffer, "Event: %s at mission time %d seconds (%d milliseconds)", Mission_events[Event_index].name, f2i(Missiontime), f2i((longlong)Missiontime * 1000));
 	Current_event_log_buffer->push_back(buffer);
 		
 	if (!Snapshot_all_events && (!(mask &=  Mission_events[Event_index].mission_log_flags))) {
@@ -22021,6 +22131,10 @@ int eval_sexp(int cur_node, int referenced_node)
 			// destroy type sexpressions
 			case OP_IS_DESTROYED:
 				sexp_val = sexp_is_destroyed( node, NULL );
+				break;
+
+			case OP_WAS_DESTROYED_BY_DELAY:
+				sexp_val = sexp_was_destroyed_by_delay(node);
 				break;
 
 			case OP_IS_SUBSYSTEM_DESTROYED:
@@ -23745,7 +23859,7 @@ int eval_sexp(int cur_node, int referenced_node)
 
 			case OP_SCRAMBLE_MESSAGES:
 			case OP_UNSCRAMBLE_MESSAGES:
-				sexp_scramble_messages(op_num == OP_SCRAMBLE_MESSAGES );
+				sexp_scramble_messages(node, op_num == OP_SCRAMBLE_MESSAGES );
 				sexp_val = SEXP_TRUE;
 				break;
 
@@ -23937,6 +24051,11 @@ int eval_sexp(int cur_node, int referenced_node)
 			case OP_CHANGE_TEAM_COLOR:
 				sexp_val = SEXP_TRUE;
 				sexp_change_team_color(node);
+				break;
+
+			case OP_CALL_SSM_STRIKE:
+				sexp_val = SEXP_TRUE;
+				sexp_call_ssm_strike(node);
 				break;
 
 			case OP_PLAYER_IS_CHEATING_BASTARD:
@@ -24448,6 +24567,7 @@ int query_operator_return_type(int op)
 		case OP_HAS_ARRIVED:
 		case OP_HAS_DEPARTED:
 		case OP_IS_DESTROYED_DELAY:
+		case OP_WAS_DESTROYED_BY_DELAY:
 		case OP_IS_SUBSYSTEM_DESTROYED_DELAY:
 		case OP_IS_DISABLED_DELAY:
 		case OP_IS_DISARMED_DELAY:
@@ -24930,6 +25050,7 @@ int query_operator_return_type(int op)
 		case OP_COPY_VARIABLE_FROM_INDEX:
 		case OP_COPY_VARIABLE_BETWEEN_INDEXES:
 		case OP_SET_ETS_VALUES:
+		case OP_CALL_SSM_STRIKE:
 			return OPR_NULL;
 
 		case OP_AI_CHASE:
@@ -25313,6 +25434,12 @@ int query_operator_argument_type(int op, int argnum)
 				return OPF_SUBSYSTEM;
 			else
 				return OPF_SHIP_WING;
+
+		case OP_WAS_DESTROYED_BY_DELAY:
+			if (argnum == 0)
+				return OPF_POSITIVE;
+			else
+				return OPF_SHIP;
 
 		case OP_IS_DESTROYED_DELAY:
 		case OP_HAS_ARRIVED_DELAY:
@@ -25868,6 +25995,14 @@ int query_operator_argument_type(int op, int argnum)
 				return OPF_TEAM_COLOR;
 			else if (argnum == 1)
 				return OPF_NUMBER;
+			else
+				return OPF_SHIP;
+
+		case OP_CALL_SSM_STRIKE:
+			if (argnum == 0)
+				return OPF_NUMBER;
+			else if (argnum == 1)
+				return OPF_IFF;
 			else
 				return OPF_SHIP;
 
@@ -26735,6 +26870,8 @@ int query_operator_argument_type(int op, int argnum)
 		//<Cutscenes>
 		case OP_SCRAMBLE_MESSAGES:
 		case OP_UNSCRAMBLE_MESSAGES:
+			return OPF_SHIP;
+
 		case OP_CUTSCENES_GET_FOV:
 			return OPF_NONE;
 
@@ -28394,7 +28531,7 @@ int get_subcategory(int sexp_id)
 		case OP_WARP_NOT_BROKEN:
 		case OP_WARP_NEVER:
 		case OP_WARP_ALLOWED:
-
+		case OP_SET_ETS_VALUES:
 			return CHANGE_SUBCATEGORY_SHIELDS_ENGINES_AND_WEAPONS;
 
 		case OP_SHIP_INVULNERABLE:
@@ -28631,6 +28768,7 @@ int get_subcategory(int sexp_id)
 		case OP_REMOVE_WEAPONS:
 		case OP_CUTSCENES_SET_TIME_COMPRESSION:
 		case OP_CUTSCENES_RESET_TIME_COMPRESSION:
+		case OP_CALL_SSM_STRIKE:
 			return CHANGE_SUBCATEGORY_SPECIAL_EFFECTS;
 
 		case OP_MODIFY_VARIABLE:
@@ -28708,7 +28846,6 @@ int get_subcategory(int sexp_id)
 		case OP_HAS_PRIMARY_WEAPON:
 		case OP_HAS_SECONDARY_WEAPON:
 		case OP_GET_ETS_VALUE:
-		case OP_SET_ETS_VALUES:
 			return STATUS_SUBCATEGORY_SHIELDS_ENGINES_AND_WEAPONS;
 			
 		case OP_CARGO_KNOWN_DELAY:
@@ -29282,6 +29419,13 @@ sexp_help_struct Sexp_help[] = {
 		"Returns a boolean value.  Takes 2 or more arguments...\r\n"
 		"\t1:\tTime delay in seconds (see above).\r\n"
 		"\tRest:\tName of ship (or wing) to check status of." },
+
+	{ OP_WAS_DESTROYED_BY_DELAY, "Was destroyed by delay (Boolean operator)\r\n"
+		"\tBecomes true <delay> seconds after all specified ships have been destroyed by the specified first ship.\r\n\r\n"
+		"Returns a boolean value.  Takes 3 or more arguments...\r\n"
+		"\t1:\tTime delay in seconds (see above).\r\n"
+		"\t2:\tShip that should have destroyed the other ships (see below).\r\n"
+		"\tRest:\tName of ships to check status of." },
 
 	{ OP_IS_SUBSYSTEM_DESTROYED_DELAY, "Is subsystem destroyed delay (Boolean operator)\r\n"
 		"\tBecomes true <delay> seconds after the specified subsystem of the specified "
@@ -29930,7 +30074,9 @@ sexp_help_struct Sexp_help[] = {
 
 	// Goober5000
 	{ OP_PLAY_SOUND_FROM_TABLE, "play-sound-from-table\r\n"
-		"\tPlays a sound listed in the Game Sounds section of sounds.tbl.  Takes 4 arguments...\r\n"
+		"\tPlays a sound listed in the Game Sounds section of sounds.tbl.  Note that if the sound is a non-3D sound (if the min and max radius are 0, or unspecified), the sound will just play without being fixed at a particular position in space.  "
+		"In this case, the origin coordinates will be ignored.  (A better design would have put the sound index first and made the origin arguments optional, but the difference between 2D and 3D sounds was not understood at the time.  C'est la vie.)\r\n\r\n"
+		"Takes 4 arguments...\r\n"
 		"\t1: Origin X\r\n"
 		"\t2: Origin Y\r\n"
 		"\t3: Origin Z\r\n"
@@ -30636,6 +30782,7 @@ sexp_help_struct Sexp_help[] = {
 		"cargo-known - If set, the ships cargo can be seen without scanning the ship\r\n"
 		"stealth - If set, the ship can't be targeted, is invisible on radar, and is ignored by AI unless firing\r\n"
 		"friendly-stealth-invisible - If set, the ship can't be targeted even by ships on the same team\r\n"
+		"hide-ship-name - If set, the ship name can't be seen when the ship is targeted\r\n"
 		"hidden-from-sensors - If set, the ship can't be targeted and appears on radar as a blinking dot\r\n"
 		"no-dynamic - Will stop allowing the AI to persue dynamic goals (eg: chasing ships it was not ordered to)\r\n"},
 
@@ -31021,7 +31168,7 @@ sexp_help_struct Sexp_help[] = {
 		"\t3:\tx coordinate to be targeted\r\n"
 		"\t4:\ty coordinate to be targeted\r\n"
 		"\t5:\tz coordinate to be targeted\r\n"
-		"\t6:\tWhether to force the beam to fire (disregarding FOV and subsystem status) (optional)\r\n"
+		"\t6:\t(Optional Operator) Whether to force the beam to fire (disregarding FOV and subsystem status). Defaults to False\r\n"
 		"\t7:\tsecond x coordinate to be targeted (optional; only used for slash beams)\r\n"
 		"\t8:\tsecond y coordinate to be targeted (optional; only used for slash beams)\r\n"
 		"\t9:\tsecond z coordinate to be targeted (optional; only used for slash beams)\r\n" },
@@ -31885,13 +32032,14 @@ sexp_help_struct Sexp_help[] = {
 
 	//phreak
 	{ OP_SCRAMBLE_MESSAGES, "scramble-messages\r\n"
-		"\tCauses messages to be sent as if the player has sustained communications subsystem or EMP damage.  Takes no arguments.\r\n"
-		"\tThis effect can be reversed using unscramble-messages."
+		"\tCauses messages to be sent as if the player has sustained communications subsystem or EMP damage.  This effect can be reversed using unscramble-messages.  Takes zero or more arguments.\r\n"
+		"\tAll (Optional):\tName of the ship for which to scramble messages.  If no ships are specified, message scrambling will be turned on for all messages the player receives.\r\n"
 	},
 
 	//phreak
 	{ OP_UNSCRAMBLE_MESSAGES, "unscramble-messages\r\n"
-		"\tUndoes the effects of scramble-messages, causing messages to be sent clearly.  Takes no arguments."
+		"\tUndoes the effects of scramble-messages, causing messages to be sent clearly.  Takes zero or more arguments.\r\n"
+		"\tAll (Optional):\tName of the ship for which to scramble messages.  If no ships are specified, message scrambling will be turned on for all messages the player receives.\r\n"
 	},
 
 	{ OP_CUTSCENES_SET_CUTSCENE_BARS, "set-cutscene-bars\r\n"
@@ -32336,6 +32484,15 @@ sexp_help_struct Sexp_help[] = {
 		"\t1:\tThe new team color name. Name must be defined in colors.tbl.\r\n"
 		"\t2:\tCrossfade time in milliseconds. During this time, colors will be mixed.\r\n"
 		"\t3:\tRest: List of ships this sexp will operate on."
+	},
+
+	{OP_CALL_SSM_STRIKE, "call-ssm-strike\r\n"
+		"\tCalls a subspace missile strike on the specified ship.\r\n"
+		"\tRequires a ssm table (ssm.tbl).\r\n"
+		"Takes 3 arguments...\r\n"
+		"\t1:\tStrike index.\r\n"
+		"\t2:\tCalling team.\r\n"
+		"\tRest:\tList of ships the strike will be called on."
 	},
 
 	{OP_PLAYER_IS_CHEATING_BASTARD, "player-is-cheating\r\n"

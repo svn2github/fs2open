@@ -405,8 +405,8 @@ json_t* serverGet(ResourceContext *context) {
 json_t* serverPut(ResourceContext *context) {
     const char* name = json_string_value(json_object_get(context->requestEntity, "name"));
     if (name) {
-        strcpy(Netgame.name, name);
-        strcpy(Multi_options_g.std_pname, name);
+        strcpy_s(Netgame.name, name);
+        strcpy_s(Multi_options_g.std_pname, name);
         // update fs2netd with the info
         if (MULTI_IS_TRACKER_GAME) {
             fs2netd_gameserver_disconnect();
@@ -416,7 +416,7 @@ json_t* serverPut(ResourceContext *context) {
     }
     const char* passwd = json_string_value(json_object_get(context->requestEntity, "password"));
     if (passwd) {
-        strcpy(Multi_options_g.std_passwd, passwd);
+        strcpy_s(Multi_options_g.std_passwd, passwd);
     }
     int framecap = atoi(json_string_value(json_object_get(context->requestEntity, "framecap")));
     if (framecap)
@@ -637,8 +637,9 @@ json_t* chatPost(ResourceContext *context) {
     const char* message = json_string_value(json_object_get(context->requestEntity, "message"));
     if (message) {
         send_game_chat_packet(Net_player, const_cast<char*>(message), MULTI_MSG_ALL, NULL);
+        std_add_chat_text(const_cast<char*>(message), 0 /*MY_NET_PLAYER_NUM*/, 1);
     }
-
+    
     return emptyResource(context);
 }
 

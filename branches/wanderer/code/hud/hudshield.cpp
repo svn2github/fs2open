@@ -139,7 +139,7 @@ void hud_shield_level_init()
 
 	Shield_mini_gauge.first_frame = bm_load_animation("targhit1", &Shield_mini_gauge.num_frames);
 	if ( Shield_mini_gauge.first_frame == -1 ) {
-		Warning(LOCATION, "Could not load in the HUD shield ani: targethit1\n");
+		Warning(LOCATION, "Could not load in the HUD shield ani: targhit1\n");
 		return;
 	}
 	Shield_mini_loaded = 1;
@@ -492,22 +492,28 @@ void hud_shield_show_mini(object *objp, int x_force, int y_force, int x_hull_off
 }
 
 // reset the shield_hit_info data structure
+// pass NULL as objp if you only need to initialize a shield_hit_info without an
+// associated ship
 void shield_info_reset(object *objp, shield_hit_info *shi)
 {
-	int i;
-
 	shi->shield_hit_status = 0;
 	shi->shield_show_bright = 0;
 
-	shi->members = objp->n_quadrants + 1;
-	shi->hull_hit_index = shi->members - 1;
+	if (objp == NULL) {
+		shi->members = 0;
+		shi->hull_hit_index = 0;
+		shi->shield_hit_timers.clear();
+		shi->shield_hit_next_flash.clear();
+	} else {
+		shi->members = objp->n_quadrants + 1;
+		shi->hull_hit_index = shi->members - 1;
+		shi->shield_hit_timers.resize(shi->members);
+		shi->shield_hit_next_flash.resize(shi->members);
 
-	shi->shield_hit_timers.resize(shi->members);
-	shi->shield_hit_next_flash.resize(shi->members);
-
-	for ( i = 0; i < shi->members; i++ ) {
-		shi->shield_hit_timers[i] = 1;
-		shi->shield_hit_next_flash[i] = 1;
+		for ( int i = 0; i < shi->members; i++ ) {
+			shi->shield_hit_timers[i] = 1;
+			shi->shield_hit_next_flash[i] = 1;
+		}
 	}
 }
 
@@ -745,12 +751,13 @@ void HudGaugeShield::showShields(object *objp, int mode)
 			break;
 		}
 
-		if ( !(sip->flags2 & SIF2_MODEL_POINT_SHIELDS) )
+		if ( !(sip->flags2 & SIF2_MODEL_POINT_SHIELDS) ) {
 			if ( objp->shield_quadrant[Quadrant_xlate[i]] < 0.1f )
 				continue;
-		else
+		} else {
 			if ( objp->shield_quadrant[i] < 0.1f )
 				continue;
+		}
 
 
 		range = MAX(HUD_COLOR_ALPHA_MAX, HUD_color_alpha + 4);

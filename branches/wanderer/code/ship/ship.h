@@ -424,7 +424,7 @@ typedef struct ship_flag_name {
 	int flag_list;						// is this flag in the 1st or 2nd ship flags list?
 } ship_flag_name;
 
-#define MAX_SHIP_FLAG_NAMES					15
+#define MAX_SHIP_FLAG_NAMES					16
 extern ship_flag_name Ship_flag_names[];
 
 // states for the flags variable within the ship structure
@@ -504,6 +504,7 @@ extern ship_flag_name Ship_flag_names[];
 #define SF2_SHIP_LOCKED						(1<<24)		// Karajorma - Prevents the player from changing the ship class on loadout screen
 #define SF2_WEAPONS_LOCKED					(1<<25)		// Karajorma - Prevents the player from changing the weapons on the ship on the loadout screen
 #define SF2_SHIP_SELECTIVE_LINKING			(1<<26)		// RSAXVC - Allow pilot to pick firing configuration
+#define SF2_SCRAMBLE_MESSAGES				(1<<27)		// Goober5000 - all messages sent from this ship appear scrambled
 
 // If any of these bits in the ship->flags are set, ignore this ship when targeting
 extern int TARGET_SHIP_IGNORE_FLAGS;
@@ -1490,6 +1491,7 @@ typedef struct wing {
 
 	int	wave_count;								// max ships per wave (as defined by the number of ships in the ships list)
 	int	total_arrived_count;					// count of number of ships that we have created, regardless of wave
+	int red_alert_skipped_ships;				// Goober5000 - if we skipped over any indexes while creating red-alert ships
 	int	current_count;							// count of number of ships actually in this wing -- used for limit in next array
 	int	ship_index[MAX_SHIPS_PER_WING];	// index into ships array of all ships currently in the wing
 
@@ -1623,14 +1625,14 @@ extern int get_subsystem_pos(vec3d *pos, object *objp, ship_subsys *subsysp);
 
 //Template stuff, here's as good a place as any.
 int parse_ship_values(ship_info* sip, bool isTemplate, bool first_time, bool replace);
-extern int ship_template_lookup(char *name = NULL);
+extern int ship_template_lookup(const char *name = NULL);
 void parse_ship_particle_effect(ship_info* sip, particle_effect* pe, char *id_string);
 
-extern int ship_info_lookup(char *name = NULL);
-extern int ship_name_lookup(char *name, int inc_players = 0);	// returns the index into Ship array of name
-extern int ship_type_name_lookup(char *name);
+extern int ship_info_lookup(const char *name = NULL);
+extern int ship_name_lookup(const char *name, int inc_players = 0);	// returns the index into Ship array of name
+extern int ship_type_name_lookup(const char *name);
 
-extern int wing_lookup(char *name);
+extern int wing_lookup(const char *name);
 
 // returns 0 if no conflict, 1 if conflict, -1 on some kind of error with wing struct
 extern int wing_has_conflicting_teams(int wing_index);
@@ -1638,7 +1640,10 @@ extern int wing_has_conflicting_teams(int wing_index);
 // next function takes optional second parameter which says to ignore the current count of ships
 // in the wing -- used to tell is the wing exists or not, not whether it exists and has ships currently
 // present.
-extern int wing_name_lookup(char *name, int ignore_count = 0);
+extern int wing_name_lookup(const char *name, int ignore_count = 0);
+
+// for generating a ship name for arbitrary waves/indexes of that wing... correctly handles the # character
+extern void wing_bash_ship_name(char *ship_name, const char *wing_name, int index);
 
 extern int Player_ship_class;
 
@@ -1942,9 +1947,9 @@ void ship_end_render_cockpit_display(int cockpit_display_num);
 int warptype_match(char *p);
 
 // Goober5000
-int ship_starting_wing_lookup(char *wing_name);
-int ship_squadron_wing_lookup(char *wing_name);
-int ship_tvt_wing_lookup(char *wing_name);
+int ship_starting_wing_lookup(const char *wing_name);
+int ship_squadron_wing_lookup(const char *wing_name);
+int ship_tvt_wing_lookup(const char *wing_name);
 
 // Goober5000
 int ship_class_compare(int ship_class_1, int ship_class_2);
