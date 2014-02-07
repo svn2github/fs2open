@@ -6754,10 +6754,14 @@ void sexp_set_object_position(int n)
 	n = CDR(n);
 
 	// retime all collision checks so they're performed
-	if ( Cmdline_old_collision_sys ) {
-		obj_all_collisions_retime();
-	} else {
-		obj_collide_retime_cached_pairs();
+	// Goober5000 - only if we have a valid object (don't do this for departed ships, waypoints, etc.)
+	if (oswpt.type == OSWPT_TYPE_SHIP || oswpt.type == OSWPT_TYPE_WING)
+	{
+		if ( Cmdline_old_collision_sys ) {
+			obj_all_collisions_retime();
+		} else {
+			obj_collide_retime_cached_pairs();
+		}
 	}
 
 	// if this is a nebula mission and a player is being moved far enough,
@@ -6856,10 +6860,14 @@ void sexp_set_object_orientation(int n)
 	vm_angles_2_matrix(&target_orient, &a);
 
 	// retime all collision checks so they're performed
-	if ( Cmdline_old_collision_sys ) {
-		obj_all_collisions_retime();
-	} else {
-		obj_collide_retime_cached_pairs();
+	// Goober5000 - only if we have a valid object (don't do this for departed ships, waypoints, etc.)
+	if (oswpt.type == OSWPT_TYPE_SHIP || oswpt.type == OSWPT_TYPE_WING)
+	{
+		if ( Cmdline_old_collision_sys ) {
+			obj_all_collisions_retime();
+		} else {
+			obj_collide_retime_cached_pairs();
+		}
 	}
 
 	switch (oswpt.type)
@@ -6915,7 +6923,6 @@ void sexp_set_object_orient_sub(object *objp, vec3d *location, int turn_time, in
 
 
 	// calculate orientation matrix ----------------
-	memset(&v_orient, 0, sizeof(vec3d));
 
 	vm_vec_sub(&v_orient, location, &objp->pos);
 
@@ -8161,6 +8168,44 @@ void eval_when_do_all_exp(int all_actions, int when_op_num)
 		ptr = ptr->get_next();
 	}
 }
+
+/**
+ * This is like using when, but it takes a lot of shortcuts.  It's clearer just to separate it out into its own function, especially since it's not supposed to start
+ * a new level of special argument handling, like eval_when would do.  It's a lot like the original retail version of eval_when!
+ */
+int eval_perform_actions(int n)
+{
+	int cond, val, actions;
+	Assert( n >= 0 );
+
+	cond = CAR(n);
+	actions = CDR(n);
+
+	// evaluate the conditional to see what value we eventually return
+	val = eval_sexp(cond);
+
+	// perform all the actions in the rest of the sexp
+	// (Since we are technically inside a condition already, no special argument handling is needed.  The special argument, if any,
+	// will have been provided by a higher level of nesting.)
+	while (actions != -1)
+	{
+		// get the operator
+		int exp = CAR(actions);
+		if (exp != -1)
+			eval_sexp(exp);
+
+		// iterate
+		actions = CDR(actions);
+	}
+
+	// return whatever val was, but don't return known-*
+	if (val == SEXP_KNOWN_TRUE)
+		return SEXP_TRUE;
+	else if (val == SEXP_KNOWN_FALSE)
+		return SEXP_FALSE;
+	else
+		return val;
+}
 	
 /**
  * Evaluates the when conditional
@@ -8197,7 +8242,7 @@ int eval_when(int n, int when_op_num)
 
 
 	// if value is true, perform the actions in the 'then' part
-	if (val == SEXP_TRUE || val == SEXP_KNOWN_TRUE || when_op_num == OP_PERFORM_ACTIONS)
+	if (val == SEXP_TRUE || val == SEXP_KNOWN_TRUE)
 	{
 		// get the operator
 		int exp = CAR(actions);
@@ -8267,17 +8312,6 @@ int eval_when(int n, int when_op_num)
 		// clean up any special sexp stuff
 		Sexp_applicable_argument_list.clear_nesting_level();
 		Sexp_current_argument_nesting_level--;
-	}
-
-	// perform-actions should return whatever val was, but should not return known-*
-	if (when_op_num == OP_PERFORM_ACTIONS)
-	{
-		if (val == SEXP_KNOWN_TRUE)
-			return SEXP_TRUE;
-		else if (val == SEXP_KNOWN_FALSE)
-			return SEXP_FALSE;
-		else
-			return val;
 	}
 
 	if (Sexp_nodes[cond].value == SEXP_KNOWN_FALSE)
@@ -10545,7 +10579,6 @@ void sexp_warp_effect(int n)
 
 
 	// calculate orientation matrix ----------------
-	memset(&v_orient, 0, sizeof(vec3d));
 
 	vm_vec_sub(&v_orient, &location, &origin);
 
@@ -12256,7 +12289,11 @@ void sexp_allow_weapon(int n)
 	}
 }
 
-// generic function for all those sexps that set flags
+/**
+ * generic function for all those sexps that set flags
+ *
+ * @note this function has a similar purpose to sexp_alter_ship_flag_helper; make sure you check/update both
+ */
 void sexp_deal_with_ship_flag(int node, bool process_subsequent_nodes, int object_flag, int object_flag2, int ship_flag, int ship_flag2, int p_object_flag, int p_object_flag2, bool set_it, bool send_multiplayer = false, bool include_players_in_ship_lookup = false)
 {
 	char *ship_name;
@@ -12295,6 +12332,9 @@ void sexp_deal_with_ship_flag(int node, bool process_subsequent_nodes, int objec
 		// if ship is in-mission
 		if (ship_index >= 0)
 		{
+			// save flags for state change comparisons
+			int object_flag_orig = Objects[Ships[ship_index].objnum].flags;
+
 			// see if we have an object flag to set
 			if (object_flag)
 			{
@@ -12305,10 +12345,12 @@ void sexp_deal_with_ship_flag(int node, bool process_subsequent_nodes, int objec
 					Objects[Ships[ship_index].objnum].flags &= ~object_flag;
 			}
 
-			// handle ETS when disabling shields
+			// handle ETS when modifying shields
 			if (object_flag == OF_NO_SHIELDS) {
 				if (set_it) {
 					zero_one_ets(&Ships[ship_index].shield_recharge_index, &Ships[ship_index].weapon_recharge_index, &Ships[ship_index].engine_recharge_index);
+				} else if (object_flag_orig & OF_NO_SHIELDS) {
+					set_default_recharge_rates(&Objects[Ships[ship_index].objnum]);
 				}
 			}
 
@@ -12485,9 +12527,14 @@ void multi_sexp_deal_with_ship_flag()
 	}
 }
 
+/**
+ * sets flags on objects from alter-ship-flag
+ *
+ * @note this function has a similar purpose to sexp_deal_with_ship_flag; make sure you check/update both
+ */
 void sexp_alter_ship_flag_helper(object_ship_wing_point_team &oswpt, bool future_ships, int object_flag, int object_flag2, int ship_flag, int ship_flag2, int parse_obj_flag, int parse_obj_flag2, int ai_flag, int ai_flag2, bool set_flag)
 {
-	int i;
+	int i, object_flag_orig;
 	ship_obj	*so;
 	object_ship_wing_point_team oswpt2;
 	p_object *p_objp;
@@ -12548,6 +12595,9 @@ void sexp_alter_ship_flag_helper(object_ship_wing_point_team &oswpt, bool future
 
 		// finally! If we actually have a ship, we can set its flags!
 		case OSWPT_TYPE_SHIP:
+			// save flags for state change comparisons
+			object_flag_orig = oswpt.objp->flags;
+
 			// see if we have an object flag to set
 			if (object_flag)
 			{
@@ -12556,6 +12606,15 @@ void sexp_alter_ship_flag_helper(object_ship_wing_point_team &oswpt, bool future
 					oswpt.objp->flags |= object_flag;
 				else
 					oswpt.objp->flags &= ~object_flag;
+			}
+
+			// handle ETS when modifying shields
+			if (object_flag == OF_NO_SHIELDS) {
+				if (set_flag) {
+					zero_one_ets(&oswpt.shipp->shield_recharge_index, &oswpt.shipp->weapon_recharge_index, &oswpt.shipp->engine_recharge_index);
+				} else if (object_flag_orig & OF_NO_SHIELDS) {
+					set_default_recharge_rates(oswpt.objp);
+				}
 			}
 
 			// see if we have an object flag2 to set
@@ -12683,6 +12742,7 @@ void sexp_alter_ship_flag(int node)
 	object_ship_wing_point_team oswpt;
 
 	flag_name = CTEXT(node); 
+
 	for ( i = 0; i < MAX_OBJECT_FLAG_NAMES; i++) {
 		if (!stricmp(Object_flag_names[i].flag_name, flag_name)) {
 			// make sure the list writes to the correct list of flags!
@@ -14861,6 +14921,9 @@ int sexp_is_facing(int node)
 	if (oswpt.type == OSWPT_TYPE_EXITED || oswpt.type == OSWPT_TYPE_PARSE_OBJECT) {
 		return SEXP_CANT_EVAL;
 	}
+
+	if (oswpt.type == OSWPT_TYPE_NONE)
+		return SEXP_CANT_EVAL;
 
 	origin_objp = &Objects[origin_shipp->objnum];
 	target_objp = oswpt.objp;
@@ -22181,8 +22244,11 @@ int eval_sexp(int cur_node, int referenced_node)
 			case OP_WHEN:
 			case OP_WHEN_ARGUMENT:
 			case OP_IF_THEN_ELSE:
-			case OP_PERFORM_ACTIONS:
 				sexp_val = eval_when( node, op_num );
+				break;
+
+			case OP_PERFORM_ACTIONS:
+				sexp_val = eval_perform_actions( node );
 				break;
 
 			case OP_COND:
@@ -28992,7 +29058,7 @@ sexp_help_struct Sexp_help[] = {
 	// Goober5000
 	{ OP_PERFORM_ACTIONS, "perform-actions\r\n"
 		"\tThis sexp allows actions to be performed as part of a conditional test.  It is most useful for assigning variables or performing some sort of pre-test action within the conditional part of \"when\", etc.  "
-		"It works well as the first branch of an \"and\" sexp, provided it returns true so as to evaluate the other \"and\" arguments.\r\n\r\n"
+		"It works well as the first branch of an \"and\" sexp, provided it returns true so as to not affect the return value of the \"and\".\r\n\r\n"
 		"Returns a boolean value.  Takes 2 or more arguments.\r\n"
 		"\t1:\tA boolean value to return after all successive actions have been performed.\r\n"
 		"\tRest:\tActions to perform, which would normally appear in a \"when\" sexp.\r\n" },
@@ -30509,7 +30575,7 @@ sexp_help_struct Sexp_help[] = {
 		"invulnerable - Stops ship from taking any damage\r\n"
 		"protect-ship - Ship and Turret AI will ignore and not attack ship\r\n"
 		"beam-protect-ship - Turrets with beam weapons will ignore and not attack ship\r\n"
-		"no-shields - Ship will have no shields\r\n"
+		"no-shields - Ship will have no shields (ETS will be rebalanced if shields were off and are enabled)\r\n"
 		"targetable-as-bomb - Allows ship to be targetted with the bomb targetting key\r\n"
 		"flak-protect-ship - Turrets with flak weapons will ignore and not attack ship\r\n"
 		"laser-protect-ship - Turrets with laser weapons will ignore and not attack ship\r\n"
@@ -30563,7 +30629,8 @@ sexp_help_struct Sexp_help[] = {
 		"\t1+:\tName of ships to make nontargetable with bomb targeting key." },
 
 	{ OP_SHIELDS_ON, "shields-on\r\n" //-Sesquipedalian
-		"\tCauses the ship listed in this sexpression to have their shields activated.\r\n\r\n"
+		"\tCauses the ship listed in this sexpression to have their shields activated.\r\n"
+		"If the ship had no-shields prior to the sexp being called, the ETS will be rebalanced to default.\r\n"
 		"Takes 1 or more arguments...\r\n"
 		"\t1+:\tName of ships to activate shields on." },
 

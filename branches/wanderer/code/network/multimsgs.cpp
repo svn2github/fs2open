@@ -3337,9 +3337,9 @@ void process_turret_fired_packet( ubyte *data, header *hinfo )
 	}
 
 	weapon_objnum = weapon_create( &pos, &orient, wid, OBJ_INDEX(objp), -1, 1, 0, 0.0f, ssp);
-	wid = Weapons[Objects[weapon_objnum].instance].weapon_info_index;
 
 	if (weapon_objnum != -1) {
+		wid = Weapons[Objects[weapon_objnum].instance].weapon_info_index;
 		if ( Weapon_info[wid].launch_snd != -1 ) {
 			snd_play_3d( &Snds[Weapon_info[wid].launch_snd], &pos, &View_position );
 		}		
@@ -6421,6 +6421,7 @@ void send_player_stats_block_packet(net_player *pl, int stats_code, net_player *
 			idx += MAX_SHIPS_PER_PACKET; 
 		}
 
+		Assert( (Num_medals >= 0) && (Num_medals < USHRT_MAX) );
 		ADD_USHORT( (ushort)Num_medals );
 
 		// medal information
@@ -6532,8 +6533,8 @@ void process_player_stats_block_packet(ubyte *data, header *hinfo)
 	scoring_struct *sc,bogus;
 	short player_id;
 	int offset = HEADER_LENGTH;
-	ushort u_tmp;
-	int i_tmp, num_medals;
+	ushort u_tmp, num_medals;
+	int i_tmp;
 
 	// nprintf(("Network","----------++++++++++********RECEIVED STATS***********+++++++++----------\n"));
 
@@ -8369,8 +8370,8 @@ void process_flak_fired_packet(ubyte *data, header *hinfo)
 
 	// create the weapon object	
 	weapon_objnum = weapon_create( &pos, &orient, wid, OBJ_INDEX(objp), -1, 1, 0, 0.0f, ssp);
-	wid = Weapons[Objects[weapon_objnum].instance].weapon_info_index;
 	if (weapon_objnum != -1) {
+		wid = Weapons[Objects[weapon_objnum].instance].weapon_info_index;
 		if ( Weapon_info[wid].launch_snd != -1 ) {
 			snd_play_3d( &Snds[Weapon_info[wid].launch_snd], &pos, &View_position );
 		}

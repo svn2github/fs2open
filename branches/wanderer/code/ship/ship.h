@@ -305,8 +305,10 @@ typedef struct cockpit_display_info {
 // structure definition for a linked list of subsystems for a ship.  Each subsystem has a pointer
 // to the static data for the subsystem.  The obj_subsystem data is defined and read in the model
 // code.  Other dynamic data (such as current_hits) should remain in this structure.
-typedef	struct ship_subsys {
-	struct ship_subsys *next, *prev;				//	Index of next and previous objects in list.
+class ship_subsys
+{
+public:
+	class ship_subsys *next, *prev;				//	Index of next and previous objects in list.
 	model_subsystem *system_info;					// pointer to static data for this subsystem -- see model.h for definition
 
 	int			parent_objnum;						// objnum of the parent ship
@@ -369,7 +371,7 @@ typedef	struct ship_subsys {
 	int subsys_cargo_name;			// cap ship cargo on subsys
 	fix time_subsys_cargo_revealed;	// added by Goober5000
 
-	triggered_rotation trigger;		//the actual currently running animation and assosiated states
+	int triggered_rotation_index;		//the actual currently running animation and assosiated states
 
 	float points_to_target;
 	float base_rotation_rate_pct;
@@ -397,8 +399,14 @@ typedef	struct ship_subsys {
 
 	//Per-turret ownage settings - SUSHI
 	int turret_max_bomb_ownage; 
-	int turret_max_target_ownage; 
-} ship_subsys;
+	int turret_max_target_ownage;
+
+	ship_subsys()
+		: next(NULL), prev(NULL)
+	{}
+
+	void clear();
+};
 
 // structure for subsystems which tells us the total count of a particular type of subsystem (i.e.
 // we might have 3 engines), and the relative strength of the subsystem.  The #defines in model.h
@@ -848,17 +856,6 @@ typedef struct exited_ship {
 	char	cargo1;
 	float damage_ship[MAX_DAMAGE_SLOTS];		// A copy of the arrays from the ship so that we can figure out what damaged it
 	int   damage_ship_id[MAX_DAMAGE_SLOTS];
-
-	exited_ship()
-		: team( 0 ), flags( 0 ), time( 0 ), hull_strength( 0 ),
-		  time_cargo_revealed( 0 ), cargo1( 0 )
-	{ 
-		ship_name[ 0 ] = '\0';
-		obj_signature = -1;
-		ship_class = -1; 
-		memset( damage_ship, 0, sizeof( damage_ship ) );
-		memset( damage_ship_id, 0, sizeof( damage_ship_id ) );
-	}
 } exited_ship;
 
 extern SCP_vector<exited_ship> Ships_exited;
@@ -910,7 +907,8 @@ extern int ship_find_exited_ship_by_signature( int signature);
 
 #define	SIF_NO_FRED					(1 << 31)	// not available in fred
 
-// flags2 list. If this is updated MAX_SHIP_FLAGS must also be updated!
+
+// flags2 list.
 #define SIF2_DEFAULT_IN_TECH_DATABASE		(1 << 0)	// default in tech database - Goober5000
 #define SIF2_DEFAULT_IN_TECH_DATABASE_M		(1 << 1)	// ditto - Goober5000
 #define SIF2_FLASH							(1 << 2)	// makes a flash when it explodes
@@ -928,8 +926,8 @@ extern int ship_find_exited_ship_by_signature( int signature);
 #define SIF2_NO_LIGHTING					(1 << 14)	// Valathil - No lighting for this ship
 #define SIF2_DYN_PRIMARY_LINKING			(1 << 15)	// RSAXVC - Dynamically generate weapon linking options
 #define SIF2_AUTO_SPREAD_SHIELDS			(1 << 16)	// zookeeper - auto spread shields
-// !!! IF YOU ADD A FLAG HERE BUMP MAX_SHIP_FLAGS !!!
-#define	MAX_SHIP_FLAGS	17		//	Number of distinct flags for flags field in ship_info struct
+#define SIF2_DRAW_WEAPON_MODELS				(1 << 17)	// the ship draws weapon models of any sort (used to be a boolean)
+
 #define	SIF_DEFAULT_VALUE		0
 #define SIF2_DEFAULT_VALUE		0
 
@@ -947,7 +945,7 @@ extern int ship_find_exited_ship_by_signature( int signature);
 
 // masks for preventing only non flag entry SIF flags from being cleared
 #define SIF_MASK				SIF_AFTERBURNER
-#define SIF2_MASK				0
+#define SIF2_MASK				SIF2_DRAW_WEAPON_MODELS
 
 #define REGULAR_WEAPON	(1<<0)
 #define DOGFIGHT_WEAPON (1<<1)
@@ -1094,16 +1092,6 @@ typedef struct man_thruster {
 	float radius;
 
 	vec3d pos, norm;
-	man_thruster()
-		: use_flags( 0 ), tex_nframes( 0 ), tex_fps( 0 ), length( 0. ), radius( 0. )
-	{
-		tex_id=-1;
-		start_snd=-1;
-		loop_snd=-1;
-		stop_snd=-1;
-		memset( &pos, 0, sizeof( vec3d ) );
-		memset( &norm, 0, sizeof( vec3d ) );
-	}
 } man_thruster;
 
 //Warp type defines
@@ -1195,13 +1183,11 @@ public:
 	float		rotdamp;								// rotational drag
 	float		delta_bank_const;
 	vec3d	max_vel;								//	max velocity of the ship in the linear directions -- read from ships.tbl
-	vec3d	afterburner_max_vel;				//	max velocity of the ship in the linear directions when afterburners are engaged -- read from ships.tbl
 	vec3d	max_rotvel;							// maximum rotational velocity
 	vec3d	rotation_time;						// time to rotate in x/y/z dimension traveling at max rotvel
 	float		srotation_time;					//	scalar, computed at runtime as (rotation_time.x + rotation_time.y)/2
 	float		max_rear_vel;						// max speed ship can go backwards.
 	float		forward_accel;
-	float		afterburner_forward_accel;		// forward acceleration with afterburner engaged
 	float		forward_decel;
 	float		slide_accel;
 	float		slide_decel;
@@ -1281,6 +1267,8 @@ public:
 	float		max_weapon_regen_per_second;	// Goober5000 - max percent/100 of weapon energy regenerated per second
 
 	// Afterburner fields
+	vec3d		afterburner_max_vel;				//	max velocity of the ship in the linear directions when afterburners are engaged -- read from ships.tbl
+	float		afterburner_forward_accel;		// forward acceleration with afterburner engaged
 	float		afterburner_fuel_capacity;		// maximum afterburner fuel that can be stored
 	float		afterburner_burn_rate;			// rate in fuel/second that afterburner consumes fuel
 	float		afterburner_recover_rate;		//	rate in fuel/second that afterburner recovers fuel
@@ -1292,14 +1280,17 @@ public:
 	int		cmeasure_max;						//	Number of charges of countermeasures this ship can hold.
 
 	int num_primary_banks;										// Actual number of primary banks (property of model)
-	int num_secondary_banks;									//	Actual number of secondary banks (property of model)
-	int primary_bank_weapons[MAX_SHIP_PRIMARY_BANKS];			// Weapon_info[] index for the weapon in the bank
-	
+	int primary_bank_weapons[MAX_SHIP_PRIMARY_BANKS];			// Weapon_info[] index for the weapon in the bank	
 	// Goober5000's ballistic conversion
 	int primary_bank_ammo_capacity[MAX_SHIP_PRIMARY_BANKS];	// Capacity of primary ballistic bank
-	
+
+	int num_secondary_banks;									//	Actual number of secondary banks (property of model)
 	int secondary_bank_weapons[MAX_SHIP_SECONDARY_BANKS];	// Weapon_info[] index for the weapon in the bank
 	int secondary_bank_ammo_capacity[MAX_SHIP_SECONDARY_BANKS];	// Capacity of bank (not number of missiles)
+
+	bool draw_primary_models[MAX_SHIP_PRIMARY_BANKS];
+	bool draw_secondary_models[MAX_SHIP_SECONDARY_BANKS];
+	float weapon_model_draw_distance;
 
 	float	max_hull_strength;				// Max hull strength of this class of ship.
 	float	max_shield_strength;
@@ -1376,8 +1367,8 @@ public:
 	float		thruster01_glow_rad_factor;
 	float		thruster02_glow_rad_factor;
 	float		thruster03_glow_rad_factor;
-	float		thruster_dist_rad_factor;
 	float		thruster02_glow_len_factor;
+	float		thruster_dist_rad_factor;
 	float		thruster_dist_len_factor;
 
 	bool		draw_distortion;
@@ -1385,10 +1376,6 @@ public:
 	int splodeing_texture;
 	char splodeing_texture_name[MAX_FILENAME_LEN];
 
-	bool draw_primary_models[MAX_SHIP_PRIMARY_BANKS];
-	bool draw_secondary_models[MAX_SHIP_SECONDARY_BANKS];
-	bool draw_models; //any weapon mode will be drawn
-	float weapon_model_draw_distance;
 	
 	int armor_type_idx;
 	int shield_armor_type_idx;

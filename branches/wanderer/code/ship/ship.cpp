@@ -660,112 +660,148 @@ int lightningtype_match(char *p)
 void init_ship_entry(ship_info *sip)
 {
 	int i,j;
-	
+
 	sip->name[0] = '\0';
 	sip->alt_name[0] = '\0';
 	sprintf(sip->short_name, "ShipClass%d", (sip - Ship_info));
 	sip->species = 0;
 	sip->class_type = -1;
-	
+
 	sip->type_str = sip->maneuverability_str = sip->armor_str = sip->manufacturer_str = NULL;
-	sip->desc = NULL;
+	sip->desc = sip->tech_desc = NULL;
 	sip->tech_title[0] = 0;
-	sip->tech_desc = NULL;
+
 	sip->ship_length = NULL;
 	sip->gun_mounts = NULL;
 	sip->missile_banks = NULL;
-	
+
+	sip->cockpit_pof_file[0] = '\0';
+	vm_vec_zero(&sip->cockpit_offset);
+	sip->pof_file[0] = '\0';
+	sip->pof_file_hud[0] = '\0';
 	sip->num_detail_levels = 1;
 	sip->detail_distance[0] = 0;
+	sip->cockpit_model_num = -1;
+	sip->model_num = -1;
+	sip->model_num_hud = -1;
 	sip->hud_target_lod = -1;
-	strcpy_s(sip->cockpit_pof_file, "");
-	sip->cockpit_offset = vmd_zero_vector;
-	strcpy_s(sip->pof_file, "");
-	strcpy_s(sip->pof_file_hud, "");
-	
-	sip->num_nondark_colors = 0;
-	
+
 	sip->density = 1.0f;
 	sip->damp = 0.0f;
 	sip->rotdamp = 0.0f;
 	sip->delta_bank_const = DEFAULT_DELTA_BANK_CONST;
 	vm_vec_zero(&sip->max_vel);
-	sip->max_speed = 0.0f;
-	vm_vec_zero(&sip->rotation_time);
 	vm_vec_zero(&sip->max_rotvel);
+	vm_vec_zero(&sip->rotation_time);
 	sip->srotation_time = 0.0f;
 	sip->max_rear_vel = 0.0f;
 	sip->forward_accel = 0.0f;
 	sip->forward_decel = 0.0f;
 	sip->slide_accel = 0.0f;
 	sip->slide_decel = 0.0f;
-	
-	sip->can_glide = false;
-	sip->glide_cap = 0.0f;
-	sip->glide_dynamic_cap = false;
-	sip->glide_accel_mult = 0.0f;
-	sip->use_newtonian_damp = false;
-	sip->newtonian_damp_override = false;
 
-	sip->aiming_flags = 0;
-	sip->autoaim_fov = 0.0f;
-	sip->minimum_convergence_distance = 0.0f;
-	sip->convergence_distance = 100.0f;
-	vm_vec_zero(&sip->convergence_offset);
-
-	sip->warpin_snd_start = -1;
-	sip->warpout_snd_start = -1;
-	sip->warpin_snd_end = -1;
-	sip->warpout_snd_end = -1;
-	sip->warpin_speed = 0.0f;
-	sip->warpout_speed = 0.0f;
+	sip->warpin_anim[0] = '\0';
 	sip->warpin_radius = 0.0f;
-	sip->warpout_radius = 0.0f;
+	sip->warpin_snd_start = -1;
+	sip->warpin_snd_end = -1;
+	sip->warpin_speed = 0.0f;
 	sip->warpin_time = 0;
 	sip->warpin_decel_exp = 1;
+	sip->warpin_type = WT_DEFAULT;
+
+	sip->warpout_anim[0] = '\0';
+	sip->warpout_radius = 0.0f;
+	sip->warpout_snd_start = -1;
+	sip->warpout_snd_end = -1;
+	sip->warpout_engage_time = -1;
+	sip->warpout_speed = 0.0f;
 	sip->warpout_time = 0;
 	sip->warpout_accel_exp = 1;
-	sip->warpin_type = WT_DEFAULT;
 	sip->warpout_type = WT_DEFAULT;
+
 	sip->warpout_player_speed = 0.0f;
-	
-	sip->explosion_propagates = 0;
-	sip->big_exp_visual_rad = -1.0f;
-	sip->prop_exp_rad_mult = 1.0f;
-	sip->death_roll_base_time = 3000;
-	sip->death_roll_r_mult = 1.0f;
-	sip->death_roll_time_mult = 1.0f;
-	sip->death_fx_r_mult = 1.0f;
-	sip->death_fx_count = 6;
-	sip->vaporize_chance = 0;
-	sip->shockwave_count = 1;
-	shockwave_create_info_init(&sip->shockwave);
-	sip->explosion_bitmap_anims.clear();
+
+	sip->flags = SIF_DEFAULT_VALUE;
+	sip->flags2 = SIF2_DEFAULT_VALUE;
+	sip->ai_class = 0;
+	sip->max_speed = 0.0f;
+	sip->min_speed = 0.0f;
+	sip->max_accel = 0.0f;
 
 	sip->collision_damage_type_idx = -1;
-	sip->collision_physics.both_small_bounce = 5.0;	//Retail default collision physics
+	// Retail default collision physics and default landing parameters
+	memset(&sip->collision_physics, 0, sizeof(ship_collision_physics));
+	sip->collision_physics.both_small_bounce = 5.0;
 	sip->collision_physics.bounce = 5.0;
 	sip->collision_physics.friction = COLLISION_FRICTION_FACTOR;
 	sip->collision_physics.rotation_factor = COLLISION_ROTATION_FACTOR;
-
-	// Default landing parameters
-	sip->collision_physics.landing_max_z = 0.0f;
-	sip->collision_physics.landing_min_z = 0.0f;
-	sip->collision_physics.landing_min_y = 0.0f;
-	sip->collision_physics.landing_max_x = 0.0f;
-	sip->collision_physics.landing_max_angle = 0.0f;
-	sip->collision_physics.landing_min_angle = 0.0f;
-	sip->collision_physics.landing_max_rot_angle = 0.0f;
-	sip->collision_physics.reorient_max_z = 0.0f;
-	sip->collision_physics.reorient_min_z = 0.0f;
-	sip->collision_physics.reorient_min_y = 0.0f;
-	sip->collision_physics.reorient_max_x = 0.0f;
-	sip->collision_physics.reorient_max_angle = 0.0f;
-	sip->collision_physics.reorient_min_angle = 0.0f;
-	sip->collision_physics.reorient_max_rot_angle = 0.0f;
-	sip->collision_physics.reorient_mult = 1.0f;	
-	sip->collision_physics.landing_rest_angle = 0.0f;
+	sip->collision_physics.reorient_mult = 1.0f;
 	sip->collision_physics.landing_sound_idx = -1;
+
+	shockwave_create_info_init(&sip->shockwave);
+	sip->explosion_propagates = 0;
+	sip->big_exp_visual_rad = -1.0f;
+	sip->prop_exp_rad_mult = 1.0f;
+	sip->death_roll_r_mult = 1.0f;
+	sip->death_fx_r_mult = 1.0f;
+	sip->death_roll_time_mult = 1.0f;
+	sip->death_roll_base_time = 3000;
+	sip->death_fx_count = 6;
+	sip->shockwave_count = 1;
+	sip->explosion_bitmap_anims.clear();
+	sip->vaporize_chance = 0;
+
+	// default values from shipfx.cpp
+	sip->impact_spew.n_high = 30;
+	sip->impact_spew.n_low = 25;
+	sip->impact_spew.max_rad = 0.5f;
+	sip->impact_spew.min_rad = 0.2f;
+	sip->impact_spew.max_life = 0.55f;
+	sip->impact_spew.min_life = 0.05f;
+	sip->impact_spew.max_vel = 12.0f;
+	sip->impact_spew.min_vel = 2.0f;
+	sip->impact_spew.variance = 1.0f;
+
+	// default values from shipfx.cpp
+	sip->damage_spew.n_high = 1;						// 1 is used here to trigger retail behaviour
+	sip->damage_spew.n_low = 0;
+	sip->damage_spew.max_rad = 1.3f;
+	sip->damage_spew.min_rad = 0.7f;
+	sip->damage_spew.max_life = 0.0f;
+	sip->damage_spew.min_life = 0.0f;
+	sip->damage_spew.max_vel = 12.0f;
+	sip->damage_spew.min_vel = 3.0f;
+	sip->damage_spew.variance = 0.0f;
+
+	sip->split_particles.n_high = 80;
+	sip->split_particles.n_low = 40;
+	sip->split_particles.max_rad = 0.0f;
+	sip->split_particles.min_rad = 0.0f;
+	sip->split_particles.max_life = 0.0f;
+	sip->split_particles.min_life = 0.0f;
+	sip->split_particles.max_vel = 0.0f;
+	sip->split_particles.min_vel = 0.0f;
+	sip->split_particles.variance = 2.0f;
+
+	sip->knossos_end_particles.n_high = 30;
+	sip->knossos_end_particles.n_low = 15;
+	sip->knossos_end_particles.max_rad = 100.0f;
+	sip->knossos_end_particles.min_rad = 30.0f;
+	sip->knossos_end_particles.max_life = 12.0f;
+	sip->knossos_end_particles.min_life = 2.0f;
+	sip->knossos_end_particles.max_vel = 350.0f;
+	sip->knossos_end_particles.min_vel = 50.0f;
+	sip->knossos_end_particles.variance = 2.0f;
+
+	sip->regular_end_particles.n_high = 100;
+	sip->regular_end_particles.n_low = 50;
+	sip->regular_end_particles.max_rad = 1.5f;
+	sip->regular_end_particles.min_rad = 0.1f;
+	sip->regular_end_particles.max_life = 4.0f;
+	sip->regular_end_particles.min_life = 0.5f;
+	sip->regular_end_particles.max_vel = 20.0f;
+	sip->regular_end_particles.min_vel = 0.0f;
+	sip->regular_end_particles.variance = 2.0f;
 
 	sip->debris_min_lifetime = -1.0f;
 	sip->debris_max_lifetime = -1.0f;
@@ -774,27 +810,30 @@ void init_ship_entry(ship_info *sip)
 	sip->debris_min_rotspeed = -1.0f;
 	sip->debris_max_rotspeed = -1.0f;
 	sip->debris_damage_type_idx = -1;
-	sip->debris_max_hitpoints = -1.0f;
 	sip->debris_min_hitpoints = -1.0f;
+	sip->debris_max_hitpoints = -1.0f;
 	sip->debris_damage_mult = 1.0f;
 	sip->debris_arc_percent = 0.5f;
 
-	for ( i = 0; i < MAX_WEAPON_TYPES; i++ )
-	{
-		sip->allowed_weapons[i] = 0;
-	}
+	sip->n_subsystems = 0;
+	sip->subsystems = NULL;
 
-	for ( i = 0; i < MAX_SHIP_WEAPONS; i++ )
-	{
-		sip->restricted_loadout_flag[i] = 0;
-		for ( j = 0; j < MAX_WEAPON_TYPES; j++ )
-		{
-			sip->allowed_bank_restricted_weapons[i][j] = 0;
-		}
-	}
-	
-	sip->draw_models = false;
-	sip->weapon_model_draw_distance = 200.0f;
+	sip->power_output = 0.0f;
+	sip->max_overclocked_speed = 0.0f;
+	sip->max_weapon_reserve = 0.0f;
+	sip->max_shield_regen_per_second = 0.0f;
+	sip->max_weapon_regen_per_second = 0.0f;
+
+	vm_vec_zero(&sip->afterburner_max_vel);
+	sip->afterburner_forward_accel = 0.0f;
+	sip->afterburner_fuel_capacity = 0.0f;
+	sip->afterburner_burn_rate = 0.0f;
+	sip->afterburner_recover_rate = 0.0f;
+	sip->afterburner_max_reverse_vel = 0.0f;
+	sip->afterburner_reverse_accel = 0.0f;
+
+	sip->cmeasure_type = Default_cmeasure_index;
+	sip->cmeasure_max = 0;
 
 	sip->num_primary_banks = 0;
 	for ( i = 0; i < MAX_SHIP_PRIMARY_BANKS; i++ )
@@ -811,26 +850,18 @@ void init_ship_entry(ship_info *sip)
 		sip->draw_secondary_models[i] = false;
 		sip->secondary_bank_ammo_capacity[i] = 0;
 	}
-	
+
+	sip->weapon_model_draw_distance = 200.0f;
+
+	sip->max_hull_strength = 100.0f;
 	sip->max_shield_strength = 0.0f;
+
 	sip->max_shield_recharge = 1.0f;
+
 	sip->auto_shield_spread = 0.0f;
 	sip->auto_shield_spread_bypass = false;
 	sip->auto_shield_spread_from_lod = -1;
-	sip->shield_color[0] = 255;
-	sip->shield_color[1] = 255;
-	sip->shield_color[2] = 255;
-	for (i = 0; i < MAX_SHIELD_SECTIONS; i++)
-		sip->max_shield_segment_strength[i] = 0.0f;
-	
-	sip->power_output = 0.0f;
-	sip->max_overclocked_speed = 0.0f;
-	sip->max_weapon_reserve = 0.0f;
-	sip->max_shield_regen_per_second = 0.0f;
-	sip->max_weapon_regen_per_second = 0.0f;
-	
-	sip->max_hull_strength = 100.0f;
-	
+
 	sip->hull_repair_rate = 0.0f;
 	//-2 represents not set, in which case the default is used for the ship (if it is small)
 	sip->subsys_repair_rate = -2.0f;
@@ -838,53 +869,55 @@ void init_ship_entry(ship_info *sip)
 	sip->sup_hull_repair_rate = 0.15f;
 	sip->sup_shield_repair_rate = 0.20f;
 	sip->sup_subsys_repair_rate = 0.15f;
-	
-	sip->armor_type_idx = -1;
-	sip->shield_armor_type_idx = -1;
-	sip->flags = SIF_DEFAULT_VALUE;
-	sip->flags2 = SIF2_DEFAULT_VALUE;
-	sip->ai_class = 0;
-	
-	sip->afterburner_max_vel.xyz.x = 0.0f;
-	sip->afterburner_max_vel.xyz.y = 0.0f;
-	sip->afterburner_max_vel.xyz.z = 0.0f;
-	
-	vm_vec_zero(&sip->afterburner_max_vel);
-	sip->afterburner_forward_accel = 0.0f;
-	sip->afterburner_max_reverse_vel = 0.0f;
-	sip->afterburner_reverse_accel = 0.0f;
-	sip->afterburner_fuel_capacity = 0.0f;
-	sip->afterburner_burn_rate = 0.0f;
-	sip->afterburner_recover_rate = 0.0f;
+
+	vm_vec_zero(&sip->closeup_pos);
+	sip->closeup_zoom = 0.5f;
+
+	memset(sip->allowed_weapons, 0, sizeof(int) * MAX_WEAPON_TYPES);
+
+	memset(sip->restricted_loadout_flag, 0, sizeof(int) * MAX_SHIP_WEAPONS);
+	memset(sip->allowed_bank_restricted_weapons, 0, sizeof(int) * MAX_SHIP_WEAPONS * MAX_WEAPON_TYPES);
+
+	sip->shield_icon_index = 255;		// stored as ubyte
+	sip->icon_filename[0] = '\0';
+	sip->anim_filename[0] = '\0';
+	sip->overhead_filename[0] = '\0';
+
+	sip->selection_effect = Default_ship_select_effect;
+
+	sip->bii_index_ship = -1;
+	sip->bii_index_wing = -1;
+
+	sip->score = 0;
+
+	sip->scan_time = 2000;
+
+	memset(&sip->ct_info, 0, sizeof(trail_info) * MAX_SHIP_CONTRAILS);
+	sip->ct_count = 0;
+
+	sip->num_nondark_colors = 0;
+	memset(sip->nondark_colors, 0, sizeof(ubyte) * MAX_NONDARK_COLORS * 3);
+
+	sip->shield_color[0] = 255;
+	sip->shield_color[1] = 255;
+	sip->shield_color[2] = 255;
+
+	for (i = 0; i < MAX_SHIELD_SECTIONS; i++)
+		sip->max_shield_segment_strength[i] = 0.0f;
+
+
+	// Team colors
+	sip->uses_team_colors = false;
+	sip->default_team_name = "";
 
 	generic_bitmap_init(&sip->afterburner_trail, NULL);
 	sip->afterburner_trail_width_factor = 1.0f;
 	sip->afterburner_trail_alpha_factor = 1.0f;
 	sip->afterburner_trail_life = 5.0f;
 	sip->afterburner_trail_faded_out_sections = 0;
-	
-	sip->cmeasure_type = Default_cmeasure_index;
-	sip->cmeasure_max = 0;
 
-	sip->scan_time = 2000;
-	
-	sip->engine_snd = -1;
-	
-	vm_vec_zero(&sip->closeup_pos);
-	sip->closeup_zoom = 0.5f;
-	
-	sip->topdown_offset_def = false;
-	vm_vec_zero(&sip->topdown_offset);
-	
-	sip->shield_icon_index = 255;		// stored as ubyte
-	sip->icon_filename[0] = 0;
-	sip->anim_filename[0] = 0;
-	sip->overhead_filename[0] = 0;
-
-	sip->bii_index_ship = -1;
-	sip->bii_index_wing = -1;
-
-	sip->score = 0;
+	sip->normal_thruster_particles.clear();
+	sip->afterburner_thruster_particles.clear();
 
 	// Bobboau's thruster stuff
 	generic_anim_init( &sip->thruster_flame_info.normal );
@@ -895,84 +928,52 @@ void init_ship_entry(ship_info *sip)
 	generic_bitmap_init( &sip->thruster_secondary_glow_info.afterburn );
 	generic_bitmap_init( &sip->thruster_tertiary_glow_info.normal );
 	generic_bitmap_init( &sip->thruster_tertiary_glow_info.afterburn );
+	generic_bitmap_init( &sip->thruster_distortion_info.normal );
+	generic_bitmap_init( &sip->thruster_distortion_info.afterburn );
 
 	// Bobboau's thruster stuff
 	sip->thruster01_glow_rad_factor = 1.0f;
 	sip->thruster02_glow_rad_factor = 1.0f;
 	sip->thruster03_glow_rad_factor = 1.0f;
 	sip->thruster02_glow_len_factor = 1.0f;
-	sip->thruster_dist_len_factor = 2.0f;
 	sip->thruster_dist_rad_factor = 2.0f;
+	sip->thruster_dist_len_factor = 2.0f;
 
 	sip->draw_distortion = true;
 
 	sip->splodeing_texture = -1;
 	strcpy_s(sip->splodeing_texture_name, "boom");
 
-	sip->normal_thruster_particles.clear();
-	sip->afterburner_thruster_particles.clear();
+	sip->armor_type_idx = -1;
+	sip->shield_armor_type_idx = -1;
 
-	memset(&sip->ct_info, 0, sizeof(trail_info) * MAX_SHIP_CONTRAILS);
-	sip->ct_count = 0;
-	
-	sip->n_subsystems = 0;
-	sip->subsystems = NULL;
+	sip->can_glide = false;
+	sip->glide_cap = 0.0f;
+	sip->glide_dynamic_cap = false;
+	sip->glide_accel_mult = 0.0f;
+	sip->use_newtonian_damp = false;
+	sip->newtonian_damp_override = false;
 
-	// default values from shipfx.cpp
-	sip->impact_spew.n_high = 30;
-	sip->impact_spew.n_low = 25;
-	sip->impact_spew.max_rad = 0.5f;
-	sip->impact_spew.min_rad = 0.2f;
-	sip->impact_spew.max_life = 0.55f;
-	sip->impact_spew.min_life = 0.05f;
-	sip->impact_spew.max_vel = 12.0f;
-	sip->impact_spew.min_vel = 2.0f;
-	sip->impact_spew.variance = 1.0f;
-	
-	// default values from shipfx.cpp
-	sip->damage_spew.n_high = 1;						// 1 is used here to trigger retail behaviour
-	sip->damage_spew.n_low = 0;
-	sip->damage_spew.max_rad = 1.3f;
-	sip->damage_spew.min_rad = 0.7f;
-	sip->damage_spew.max_life = 0.0f;
-	sip->damage_spew.min_life = 0.0f;
-	sip->damage_spew.max_vel = 12.0f;
-	sip->damage_spew.min_vel = 3.0f;
-	sip->damage_spew.variance = 0.0f;
+	sip->autoaim_fov = 0.0f;
 
-	sip->knossos_end_particles.n_high = 30;
-	sip->knossos_end_particles.n_low = 15;
-	sip->knossos_end_particles.max_rad = 100.0f;
-	sip->knossos_end_particles.min_rad = 30.0f;
-	sip->knossos_end_particles.max_life = 12.0f;
-	sip->knossos_end_particles.min_life = 2.0f;
-	sip->knossos_end_particles.max_vel = 350.0f;
-	sip->knossos_end_particles.min_vel = 50.0f;
-	sip->knossos_end_particles.variance = 2.0f;
+	sip->topdown_offset_def = false;
+	vm_vec_zero(&sip->topdown_offset);
 
-	sip->split_particles.n_high = 80;
-	sip->split_particles.n_low = 40;
-	sip->split_particles.max_rad = 0.0f;
-	sip->split_particles.min_rad = 0.0f;
-	sip->split_particles.max_life = 0.0f;
-	sip->split_particles.min_life = 0.0f;
-	sip->split_particles.max_vel = 0.0f;
-	sip->split_particles.min_vel = 0.0f;
-	sip->split_particles.variance = 2.0f;
+	sip->engine_snd = -1;
+	sip->glide_start_snd = -1;
+	sip->glide_end_snd = -1;
 
-	sip->regular_end_particles.n_high = 100;
-	sip->regular_end_particles.n_low = 50;
-	sip->regular_end_particles.max_rad = 1.5f;
-	sip->regular_end_particles.min_rad = 0.1f;
-	sip->regular_end_particles.max_life = 4.0f;
-	sip->regular_end_particles.min_life = 0.5f;
-	sip->regular_end_particles.max_vel = 20.0f;
-	sip->regular_end_particles.min_vel = 0.0f;
-	sip->regular_end_particles.variance = 2.0f;
+	sip->ship_sounds.clear();
 
-	sip->cockpit_model_num = -1;
-	sip->model_num = -1;
-	sip->model_num_hud = -1;
+	sip->num_maneuvering = 0;
+	memset(sip->maneuvering, 0, MAX_MAN_THRUSTERS * sizeof(man_thruster));
+	for (i = 0; i < MAX_MAN_THRUSTERS; i++)
+	{
+		sip->maneuvering[i].start_snd = -1;
+		sip->maneuvering[i].loop_snd = -1;
+		sip->maneuvering[i].stop_snd = -1;
+		sip->maneuvering[i].tex_id = -1;
+	}
 
 	sip->radar_image_2d_idx = -1;
 	sip->radar_color_image_2d_idx = -1;
@@ -982,28 +983,29 @@ void init_ship_entry(ship_info *sip)
 	for (i=0;i<MAX_IFFS;i++)
 	{
 		for (j=0;j<MAX_IFFS;j++)
-		{
 			sip->ship_iff_info[i][j] = -1;
-		}
 	}
-	
+
+	sip->aiming_flags = 0;
+	sip->minimum_convergence_distance = 0.0f;
+	sip->convergence_distance = 100.0f;
+	vm_vec_zero(&sip->convergence_offset);
+
 	sip->emp_resistance_mod = 0.0f;
 
-	sip->displays.clear();
+	sip->piercing_damage_draw_limit = 0.10f;
 	sip->num_shield_segments = MAX_SHIELD_SECTIONS;
+
+	sip->damage_lightning_type = SLT_DEFAULT;
 
 	sip->surface_shield_ani = -1;
 	sip->hud_gauges.clear();
 	sip->hud_enabled = false;
 	sip->hud_retail = false;
-	sip->piercing_damage_draw_limit = 0.10f;
-	sip->damage_lightning_type = SLT_DEFAULT;
+
+	sip->displays.clear();
+
 	sip->pathMetadata.clear();
-
-	sip->selection_effect = Default_ship_select_effect;
-
-	// Team colors
-	sip->uses_team_colors = false;
 }
 
 /**
@@ -2393,7 +2395,7 @@ int parse_ship_values(ship_info* sip, bool isTemplate, bool first_time, bool rep
 
 	if(optional_string("$Show Primary Models:"))
 	{
-		sip->draw_models = true;
+		sip->flags2 |= SIF2_DRAW_WEAPON_MODELS;
 		stuff_bool_list(sip->draw_primary_models, sip->num_primary_banks);
 	}
 
@@ -2480,7 +2482,7 @@ int parse_ship_values(ship_info* sip, bool isTemplate, bool first_time, bool rep
     
 	if(optional_string("$Show Secondary Models:"))
 	{
-		sip->draw_models = true;
+		sip->flags2 |= SIF2_DRAW_WEAPON_MODELS;
 		stuff_bool_list(sip->draw_secondary_models, sip->num_secondary_banks);
 	}
 
@@ -2677,8 +2679,10 @@ int parse_ship_values(ship_info* sip, bool isTemplate, bool first_time, bool rep
 
 	if (optional_string("$Flags:"))
 	{
-		char ship_strings[MAX_SHIP_FLAGS][NAME_LENGTH];
-		int num_strings = stuff_string_list(ship_strings, MAX_SHIP_FLAGS);
+		// we'll assume the list will contain no more than 20 distinct tokens
+		char ship_strings[20][NAME_LENGTH];
+		int num_strings = stuff_string_list(ship_strings, 20);
+
 		int ship_type_index = -1;
 
 		if (!optional_string("+noreplace")) {
@@ -2852,16 +2856,18 @@ int parse_ship_values(ship_info* sip, bool isTemplate, bool first_time, bool rep
 			Warning(LOCATION, "Ship %s entry has $Trails field specified, but no properties given.", sip->name);
 	}
 
-	if(optional_string("$Countermeasure type:")) {
+	if (optional_string("$Countermeasure type:")) {
 		stuff_string(buf, F_NAME, SHIP_MULTITEXT_LENGTH);
 		int res = weapon_info_lookup(buf);
-		if(res == -1) {
-			Warning(LOCATION, "Could not find weapon type '%s' to use as countermeasure on ship class '%s'", sip->name);
-		} else if(Weapon_info[res].wi_flags & WIF_BEAM) {
+		if (res < 0) {
+			Warning(LOCATION, "Could not find weapon type '%s' to use as countermeasure on ship class '%s'", buf, sip->name);
+		} else if (Weapon_info[res].wi_flags & WIF_BEAM) {
 			Warning(LOCATION, "Attempt made to set a beam weapon as a countermeasure on ship class '%s'", sip->name);
 		} else {
 			sip->cmeasure_type = res;
 		}
+	} else if (Species_info[sip->species].cmeasure_index >= 0) {
+		sip->cmeasure_type = Species_info[sip->species].cmeasure_index;
 	}
 
 	if(optional_string("$Countermeasures:"))
@@ -3696,14 +3702,12 @@ int parse_ship_values(ship_info* sip, bool isTemplate, bool first_time, bool rep
 					queued_animation *current_trigger;
 
 					sp->triggers = (queued_animation*)vm_realloc(sp->triggers, sizeof(queued_animation) * (sp->n_triggers + 1));
-					
-					// Echelon9 - horrible, direct memory management (works for now)
 					Verify(sp->triggers != NULL);
-					memset(&sp->triggers[sp->n_triggers], 0, sizeof(queued_animation));
 					
-					current_trigger = &sp->triggers[sp->n_triggers];
-					sp->n_triggers++;
 					//add a new trigger
+					current_trigger = &sp->triggers[sp->n_triggers];
+					queued_animation_init(current_trigger);
+					sp->n_triggers++;
 
 					required_string("$type:");
 					char atype[NAME_LENGTH];
@@ -4492,13 +4496,15 @@ static void ship_clear_subsystems()
 
 	for (i = 0; i < NUM_SHIP_SUBSYSTEM_SETS; i++) {
 		if (Ship_subsystems[i] != NULL) {
-			vm_free(Ship_subsystems[i]);
+			delete[] Ship_subsystems[i];
 			Ship_subsystems[i] = NULL;
 		}
 	}
 
 	Num_ship_subsystems = 0;
 	Num_ship_subsystems_allocated = 0;
+
+	Triggered_rotations.clear();
 }
 
 static int ship_allocate_subsystems(int num_so, bool page_in = false)
@@ -4537,8 +4543,7 @@ static int ship_allocate_subsystems(int num_so, bool page_in = false)
 			return 0;
 		}
 
-		Ship_subsystems[idx] = (ship_subsys*) vm_malloc( sizeof(ship_subsys) * NUM_SHIP_SUBSYSTEMS_PER_SET );
-		memset( Ship_subsystems[idx], 0, sizeof(ship_subsys) * NUM_SHIP_SUBSYSTEMS_PER_SET );
+		Ship_subsystems[idx] = new ship_subsys[NUM_SHIP_SUBSYSTEMS_PER_SET];
 
 		// append the new set to our free list
 		for (i = 0; i < NUM_SHIP_SUBSYSTEMS_PER_SET; i++)
@@ -4969,7 +4974,11 @@ void ship::clear()
 	wingnum = -1;
 	orders_accepted = 0;
 
-	memset(&subsys_list, 0, sizeof(ship_subsys));
+	subsys_list.clear();
+	// since these aren't cleared by clear()
+	subsys_list.next = NULL;
+	subsys_list.prev = NULL;
+
 	memset(&subsys_info, 0, SUBSYSTEM_MAX * sizeof(ship_subsys_info));
 
 	memset(last_targeted_subobject, 0, MAX_PLAYERS * sizeof(ship_subsys *));
@@ -5125,7 +5134,7 @@ void ship::clear()
 	special_warpin_objnum = -1;
 	special_warpout_objnum = -1;
 
-	memset(&fighter_beam_turret_data, 0, sizeof(ship_subsys));
+	fighter_beam_turret_data.clear();
 	memset(&beam_sys_info, 0, sizeof(model_subsystem));
 
 	primitive_sensor_range = DEFAULT_SHIP_PRIMITIVE_SENSOR_RANGE;
@@ -5492,6 +5501,89 @@ void ship_copy_subsystem_fixup(ship_info *sip)
 
 }
 
+// as with object, don't set next and prev to NULL because they keep the object on the free and used lists
+void ship_subsys::clear()
+{
+	int i;
+
+	system_info = NULL;
+
+	parent_objnum = -1;
+
+	sub_name[0] = 0;
+	current_hits = max_hits = 0.0f;
+
+	flags = 0;
+
+	subsys_guardian_threshold = 0;
+	armor_type_idx = -1;
+
+	turret_best_weapon = -1;
+	turret_last_fire_direction = vmd_zero_vector;
+	turret_next_enemy_check_stamp = timestamp(0);
+	turret_next_fire_stamp = timestamp(0);
+	turret_enemy_objnum = -1;
+	turret_enemy_sig = 0;
+	turret_next_fire_pos = 0;
+	turret_time_enemy_in_range = 0.0f;
+
+	for (i = 0; i < NUM_TURRET_ORDER_TYPES; i++)
+		turret_targeting_order[i] = -1;
+	optimum_range = 0.0f;
+	favor_current_facing = 0.0f;
+	targeted_subsys = NULL;
+	scripting_target_override = false;
+	last_fired_weapon_info_index = -1;
+
+	turret_pick_big_attack_point_timestamp = timestamp(0);
+	turret_big_attack_point = vmd_zero_vector;
+
+	turret_animation_position = MA_POS_NOT_SET;
+	turret_animation_done_time = 0;
+
+	for (i = 0; i < MAX_TFP; i++)
+		turret_swarm_info_index[i] = -1;
+	turret_swarm_num = 0;
+
+	awacs_intensity = 0.0f;
+	awacs_radius = 0.0f;
+
+	memset(&weapons, 0, sizeof(ship_weapon));
+
+	memset(&submodel_info_1, 0, sizeof(submodel_instance_info));
+	memset(&submodel_info_2, 0, sizeof(submodel_instance_info));
+
+	disruption_timestamp = timestamp(0);
+
+	subsys_cargo_name = 0;
+	time_subsys_cargo_revealed = 0;
+
+	triggered_rotation_index = -1;
+
+	points_to_target = 0.0f;
+	base_rotation_rate_pct = 0.0f;
+	gun_rotation_rate_pct = 0.0f;
+
+	subsys_snd_flags = 0;
+
+	rotation_timestamp = timestamp(0);
+
+	world_to_turret_matrix = vmd_identity_matrix;
+
+	for (i = 0; i < 32; i++)
+		target_priority[i] = -1;
+	num_target_priorities = 0;
+
+	next_aim_pos_time = 0;
+	last_aim_enemy_pos = vmd_zero_vector;
+	last_aim_enemy_vel = vmd_zero_vector;
+
+	rof_scaler = 1.0f;
+	turn_rate = 0.0f;
+
+	turret_max_bomb_ownage = -1; 
+	turret_max_target_ownage = -1;
+}
 
 /**
  * Set subsystem
@@ -5527,8 +5619,9 @@ int subsys_set(int objnum, int ignore_subsys_info)
 		// set up the linked list
 		ship_system = GET_FIRST( &ship_subsys_free_list );		// get a new element from the ship_subsystem array
 		Assert ( ship_system != &ship_subsys_free_list );		// shouldn't have the dummy element
-		list_remove( ship_subsys_free_list, ship_system );	// remove the element from the array
+		list_remove( ship_subsys_free_list, ship_system );		// remove the element from the array
 		list_append( &shipp->subsys_list, ship_system );		// link the element into the ship
+		ship_system->clear();									// initialize it to a known blank slate
 
 		ship_system->system_info = model_system;				// set the system_info pointer to point to the data read in from the model
 
@@ -5743,6 +5836,13 @@ int subsys_set(int objnum, int ignore_subsys_info)
 
 		// Clear this flag here so we correctly rebuild the turret matrix on mission load
 		model_system->flags &= ~MSS_FLAG_TURRET_MATRIX;
+
+		// Allocate a triggered rotation instance if we need it
+		if (model_system->flags & MSS_FLAG_TRIGGERED) {
+			ship_system->triggered_rotation_index = Triggered_rotations.size();
+			triggered_rotation tr;
+			Triggered_rotations.push_back(tr);
+		}
 	}
 
 	if ( !ignore_subsys_info ) {
@@ -6024,8 +6124,6 @@ void ship_render(object * obj)
 	}
 
 	MONITOR_INC( NumShipsRend, 1 );
-
-	memset( &dfi, 0, sizeof(dock_function_info) );
 
 	// look for a warping ship, whether for me or for anybody I'm docked with
 	dock_evaluate_all_docked_objects(obj, &dfi, ship_find_warping_ship_helper);
@@ -6340,7 +6438,7 @@ void ship_render(object * obj)
 				render_flags |= MR_NO_LIGHTING;
 
 			//draw weapon models
-			if (sip->draw_models && !(shipp->flags2 & SF2_CLOAKED)) {
+			if ((sip->flags2 & SIF2_DRAW_WEAPON_MODELS) && !(shipp->flags2 & SF2_CLOAKED)) {
 				int i,k;
 				ship_weapon *swp = &shipp->weapons;
 				g3_start_instance_matrix(&obj->pos, &obj->orient, true);
@@ -11290,32 +11388,33 @@ int ship_fire_secondary( object *obj, int allow_swarm )
 			// create the weapon -- for multiplayer, the net_signature is assigned inside
 			// of weapon_create
 			weapon_num = weapon_create( &firing_pos, &firing_orient, weapon, OBJ_INDEX(obj), -1, aip->current_target_is_locked);
-			weapon = Weapons[Objects[weapon_num].instance].weapon_info_index;
-			weapon_set_tracking_info(weapon_num, OBJ_INDEX(obj), aip->target_objnum, aip->current_target_is_locked, aip->targeted_subsys);
-			has_fired = true;
 
+			if (weapon_num >= 0) {
+				weapon = Weapons[Objects[weapon_num].instance].weapon_info_index;
+				weapon_set_tracking_info(weapon_num, OBJ_INDEX(obj), aip->target_objnum, aip->current_target_is_locked, aip->targeted_subsys);
+				has_fired = true;
 
-			// create the muzzle flash effect
-			if ( (obj != Player_obj) || (sip->flags2 & SIF2_SHOW_SHIP_MODEL) || (Viewer_mode) ) {
-				// show the flash only if in not cockpit view, or if "show ship" flag is set
-				shipfx_flash_create(obj, sip->model_num, &pnt, &obj->orient.vec.fvec, 0, weapon);
-			}
+				// create the muzzle flash effect
+				if ( (obj != Player_obj) || (sip->flags2 & SIF2_SHOW_SHIP_MODEL) || (Viewer_mode) ) {
+					// show the flash only if in not cockpit view, or if "show ship" flag is set
+					shipfx_flash_create(obj, sip->model_num, &pnt, &obj->orient.vec.fvec, 0, weapon);
+				}
 
-			if((wip->wi_flags & WIF_SHUDDER) && (obj == Player_obj) && !(Game_mode & GM_STANDALONE_SERVER)){
-				// calculate some arbitrary value between 100
-				// (mass * velocity) / 10
-				game_shudder_apply(500, (wip->mass * wip->max_speed) * 0.1f);
-			}
-			
-			num_fired++;
-			swp->last_fired_weapon_index = weapon_num;			swp->detonate_weapon_time = timestamp(500);		//	Can detonate 1/2 second later.
-			if (weapon_num != -1) {
+				if((wip->wi_flags & WIF_SHUDDER) && (obj == Player_obj) && !(Game_mode & GM_STANDALONE_SERVER)){
+					// calculate some arbitrary value between 100
+					// (mass * velocity) / 10
+					game_shudder_apply(500, (wip->mass * wip->max_speed) * 0.1f);
+				}
+
+				num_fired++;
+				swp->last_fired_weapon_index = weapon_num;
+				swp->detonate_weapon_time = timestamp(500);		//	Can detonate 1/2 second later.
 				swp->last_fired_weapon_signature = Objects[weapon_num].signature;
-			}
 
-			// subtract the number of missiles fired
-			if ( Weapon_energy_cheat == 0 ){
-				swp->secondary_bank_ammo[bank]--;
+				// subtract the number of missiles fired
+				if ( Weapon_energy_cheat == 0 ){
+					swp->secondary_bank_ammo[bank]--;
+				}
 			}
 		}
 	}
@@ -15646,7 +15745,7 @@ void ship_page_in()
 	int num_ship_types_used = 0;
 	int test_id = -1;
 
-	memset( &fireball_used, 0, sizeof(int) * MAX_FIREBALL_TYPES );
+	memset( fireball_used, 0, sizeof(int) * MAX_FIREBALL_TYPES );
 
 	for (i = 0; i < Num_ship_classes; i++) {
 		if ( !ship_class_used[i] )
@@ -16743,8 +16842,8 @@ void ship_do_submodel_rotation(ship *shipp, model_subsystem *psub, ship_subsys *
 		return;
 	}
 
-	if (psub->flags & MSS_FLAG_TRIGGERED) {
-		pss->trigger.process_queue();
+	if (psub->flags & MSS_FLAG_TRIGGERED && pss->triggered_rotation_index >= 0) {
+		Triggered_rotations[pss->triggered_rotation_index].process_queue();
 		model_anim_submodel_trigger_rotate(psub, pss );
 		return;
 	

@@ -272,7 +272,6 @@ void webapiExecuteCommands() {
     for (SCP_vector<WebapiCommand*>::iterator iter = webapiCommandQueue.begin(); iter != webapiCommandQueue.end();
             ++iter) {
         (*iter)->execute();
-        free(*iter);
     }
 
     webapiCommandQueue.clear();
@@ -406,11 +405,23 @@ json_t* serverGet(ResourceContext *context) {
 json_t* serverPut(ResourceContext *context) {
     const char* name = json_string_value(json_object_get(context->requestEntity, "name"));
     if (name) {
+        strcpy(Netgame.name, name);
         strcpy(Multi_options_g.std_pname, name);
+        // update fs2netd with the info
+        if (MULTI_IS_TRACKER_GAME) {
+            fs2netd_gameserver_disconnect();
+            Sleep(50);
+            fs2netd_gameserver_start();
+        }
     }
     const char* passwd = json_string_value(json_object_get(context->requestEntity, "password"));
     if (passwd) {
         strcpy(Multi_options_g.std_passwd, passwd);
+    }
+    int framecap = atoi(json_string_value(json_object_get(context->requestEntity, "framecap")));
+    if (framecap)
+    {
+        Multi_options_g.std_framecap = framecap;
     }
 
     return json_object();
@@ -687,7 +698,15 @@ static bool webserverApiRequest(mg_connection *conn, const mg_request_info *ri) 
 
             if (pathMatch && r->method == method) {
 
-                std::string basicAuthValue = "Basic YWRtaW46YWRtaW4=";
+                std::string userNameAndPassword;
+                
+                userNameAndPassword += Multi_options_g.webapiUsername.c_str();
+                userNameAndPassword += ":";
+                userNameAndPassword += Multi_options_g.webapiPassword.c_str();
+                
+                std::string basicAuthValue = "Basic ";
+                
+                basicAuthValue += base64_encode(reinterpret_cast<const unsigned char*>(userNameAndPassword.c_str()), userNameAndPassword.length());
 
                 const char* authValue = mg_get_header(conn, "Authorization");
                 if (authValue == NULL || strcmp(authValue, basicAuthValue.c_str()) != 0) {
@@ -759,7 +778,7 @@ struct mg_context *webserverContext = NULL;
 
 void webapi_shutdown() {
     if (webserverContext) {
-        mprintf(("Webapi shutting down"));
+        mprintf(("Webapi shutting down\n"));
         mg_stop(webserverContext);
     }
 }
@@ -781,7 +800,7 @@ void std_configLoaded(multi_global_options *options) {
         "num_threads", "4",
         NULL };
 
-    mprintf(("Webapi starting on port: %d with document root at: %s", options->webapiPort, options->webuiRootDirectory.c_str()));
+    mprintf(("Webapi starting on port: %d with document root at: %s\n", options->webapiPort, options->webuiRootDirectory.c_str()));
 
     webserverContext = mg_start(&webserverCallback, NULL, mgOptions);
 }
@@ -859,6 +878,29 @@ void std_do_gui_frame() {
     webapiExecuteCommands();
 }
 
+// set the game name for the standalone. passing NULL uses the default
+void std_connect_set_gamename(char *name)
+{
+	// use the default name for now
+	if(name == NULL){
+		// if a permanent name exists, use that instead of the default
+		if(strlen(Multi_options_g.std_pname)){
+			strcpy_s(Netgame.name, Multi_options_g.std_pname);
+		} else {
+			strcpy_s(Netgame.name,XSTR("Standalone Server",916));
+		}
+	} else {
+		strcpy_s(Netgame.name,name);
+        
+		// update fs2netd
+		if (MULTI_IS_TRACKER_GAME) {
+			fs2netd_gameserver_disconnect();
+			Sleep(50);
+			fs2netd_gameserver_start();
+		}
+	}
+}
+
 /**
  * Unused methods from the original API below,
  * most of this stuff is now done in std_do_gui_frame
@@ -872,7 +914,6 @@ void std_update_player_ping(net_player *p) {}
 void std_multi_setup_goal_tree() {}
 void std_multi_add_goals() {}
 void std_multi_update_goals() {}
-void std_connect_set_gamename(char *name) {}
 void std_multi_update_netgame_info_controls() {}
 void std_multi_set_standalone_mission_name(char *mission_name) {}
 void std_gen_set_text(char *str, int field_num) {}
@@ -883,5 +924,8 @@ void std_debug_set_standalone_state_string(char *str) {}
 void std_reset_standalone_gui() {}
 void std_reset_timestamps() {}
 void std_multi_set_standalone_missiontime(float mission_time) {}
+
+// stub - not required for *nix standalone
+void std_init_os() {}
 
 #endif

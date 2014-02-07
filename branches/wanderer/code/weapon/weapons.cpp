@@ -3317,7 +3317,22 @@ void weapon_do_post_parse()
 	if (Default_cmeasure_index < 0)
 		Default_cmeasure_index = first_cmeasure_index;
 
-	// translate all spawn type weapons to referrence the appropriate spawned weapon entry
+	// now we want to resolve the countermeasures by species
+	for (SCP_vector<species_info>::iterator ii = Species_info.begin(); ii != Species_info.end(); ++ii)
+	{
+		if (*ii->cmeasure_name)
+		{
+			int index = weapon_info_lookup(ii->cmeasure_name);
+			if (index < 0)
+				Warning(LOCATION, "Could not find weapon type '%s' to use as countermeasure on species '%s'", ii->cmeasure_name, ii->species_name);
+			else if (Weapon_info[index].wi_flags & WIF_BEAM)
+				Warning(LOCATION, "Attempt made to set a beam weapon as a countermeasure on species '%s'", ii->species_name);
+			else
+				ii->cmeasure_index = index;
+		}
+	}
+
+	// translate all spawn type weapons to referrnce the appropriate spawned weapon entry
 	translate_spawn_types();
 }
 
@@ -3445,11 +3460,8 @@ void weapon_level_init()
 	if (used_weapons == NULL)
 		used_weapons = new int[Num_weapon_types];
 
-	Assert( used_weapons != NULL );
-
 	// clear out used_weapons between missions
-	if (used_weapons != NULL)
-		memset(used_weapons, 0, Num_weapon_types * sizeof(int));
+	memset(used_weapons, 0, Num_weapon_types * sizeof(int));
 
 	Weapon_flyby_sound_timer = timestamp(0);
 	Weapon_impact_timer = 1;	// inited each level, used to reduce impact sounds
@@ -5117,7 +5129,7 @@ int weapon_create( vec3d * pos, matrix * porient, int weapon_type, int parent_ob
 		wp->lifeleft = wip->lifetime;
 	} else {
 		wp->lifeleft = (rand_val) * (wip->life_max - wip->life_min) / wip->life_min;
-		if((wip->wi_flags & WIF_CMEASURE) && (parent_objp->flags & OF_PLAYER_SHIP)) {
+		if((wip->wi_flags & WIF_CMEASURE) && (parent_objp != NULL) && (parent_objp->flags & OF_PLAYER_SHIP)) {
 			wp->lifeleft *= The_mission.ai_profile->cmeasure_life_scale[Game_skill_level];
 		}
 		wp->lifeleft = wip->life_min + wp->lifeleft * (wip->life_max - wip->life_min);
@@ -5244,7 +5256,7 @@ int weapon_create( vec3d * pos, matrix * porient, int weapon_type, int parent_ob
 	}
 
 	// Ensure weapon flyby sound doesn't get played for player lasers
-	if ( parent_objp == Player_obj ) {
+	if ( parent_objp != NULL && parent_objp == Player_obj ) {
 		wp->weapon_flags |= WF_PLAYED_FLYBY_SOUND;
 	}
 
@@ -5909,7 +5921,7 @@ void weapon_hit( object * weapon_obj, object * other_obj, vec3d * hitpos, int qu
 				float draw_limit, hull_pct;
 				int dmg_type_idx, piercing_type;
 
-				ship *shipp = &Ships[other_obj->instance];
+				shipp = &Ships[other_obj->instance];
 
 				hull_pct = other_obj->hull_strength / shipp->ship_max_hull_strength;
 				dmg_type_idx = wip->damage_type_idx;

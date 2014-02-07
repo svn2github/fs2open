@@ -177,23 +177,29 @@ void multi_options_read_config()
 					if (tok != NULL) {
 						strncpy(Multi_options_g.std_pxo_password, tok, MULTI_TRACKER_STRING_LEN);
 					}
-				}
+				} else
 				if ( SETTING("+webui_root") ) {
 					NEXT_TOKEN();
 					if (tok != NULL) {
 						Multi_options_g.webuiRootDirectory = SCP_string(tok);
 					}
-				}
+				} else
 				if ( SETTING("+webapi_username") ) {
 					NEXT_TOKEN();
 					if (tok != NULL) {
 						Multi_options_g.webapiUsername = SCP_string(tok);
 					}
-				}
+				} else
 				if ( SETTING("+webapi_password") ) {
 					NEXT_TOKEN();
 					if (tok != NULL) {
 						Multi_options_g.webapiPassword = SCP_string(tok);
+					}
+				} else
+				if ( SETTING("+webapi_server_port") ) {
+					NEXT_TOKEN();
+					if (tok != NULL) {
+						Multi_options_g.webapiPort = atoi(tok);
 					}
 				}
 			}
@@ -594,20 +600,9 @@ void multi_options_process_packet(unsigned char *data, header *hinfo)
 			break;
 		}
 
-#ifndef _WIN32
-		if(Netgame.name == NULL){
-			// if a permanent name exists, use that instead of the default
-			if(strlen(Multi_options_g.std_pname)){
-				strcpy_s(Netgame.name, Multi_options_g.std_pname);
-			} else {
-				strcpy_s(Netgame.name,XSTR("Standalone Server",916));
-			}
-		}
-#else
 		// update standalone stuff
 		std_connect_set_gamename(Netgame.name);
 		std_multi_update_netgame_info_controls();
-#endif
 		break;
 
 	// get mission choice options
