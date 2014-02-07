@@ -919,6 +919,10 @@ void hud_target_hotkey_select( int k )
 			// this should not happen
 			return;
 		}
+	// if current target is in the list but this is not our current selection set,
+	// then we don't want to change target.
+	} else if (Players[Player_num].current_hotkey_set != k) {
+		next_target = target;
 	}
 	
 	// update target if more than 1 is visible
@@ -5254,7 +5258,7 @@ void hud_stuff_ship_name(char *ship_name_text, ship *shipp)
 
 		// handle translation
 		if (Lcl_gr) {
-			lcl_translate_targetbox_name(ship_name_text);
+			lcl_translate_targetbox_name_gr(ship_name_text);
 		}
 	}
 }
@@ -5294,7 +5298,7 @@ void hud_stuff_ship_callsign(char *ship_callsign_text, ship *shipp)
 
 	// handle translation
 	if (Lcl_gr) {
-		lcl_translate_targetbox_name(ship_callsign_text);
+		lcl_translate_targetbox_name_gr(ship_callsign_text);
 	}
 }
 
@@ -5321,7 +5325,7 @@ void hud_stuff_ship_class(char *ship_class_text, ship *shipp)
 
 	// handle translation
 	if (Lcl_gr) {
-		lcl_translate_targetbox_name(ship_class_text);
+		lcl_translate_targetbox_name_gr(ship_class_text);
 	}
 }
 
@@ -5981,7 +5985,7 @@ void HudGaugeWeapons::render(float frametime)
 
 		strcpy_s(name, (Weapon_info[sw->primary_bank_weapons[i]].alt_name[0]) ? Weapon_info[sw->primary_bank_weapons[i]].alt_name : Weapon_info[sw->primary_bank_weapons[i]].name);
 		if (Lcl_gr) {
-			lcl_translate_wep_name(name);
+			lcl_translate_wep_name_gr(name);
 		}
 		
 		// maybe modify name here to fit
@@ -6817,7 +6821,7 @@ void HudGaugePrimaryWeapons::render(float frametime)
 		strcpy_s(name, (Weapon_info[sw->primary_bank_weapons[i]].alt_name[0]) ? Weapon_info[sw->primary_bank_weapons[i]].alt_name : Weapon_info[sw->primary_bank_weapons[i]].name);
 		
 		if (Lcl_gr) {
-			lcl_translate_wep_name(name);
+			lcl_translate_wep_name_gr(name);
 		}
 
 		if (HudGauge::maybeFlashSexp() == i ) {

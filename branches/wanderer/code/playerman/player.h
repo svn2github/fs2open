@@ -81,15 +81,19 @@ typedef struct campaign_stats {
 	scoring_struct stats;
 } campaign_stats;
 
-typedef struct player {
+class player
+{
+public:
 	void reset();
 
 	char				callsign[CALLSIGN_LEN + 1];
 	char				short_callsign[CALLSIGN_LEN + 1];	// callsign truncated to SHORT_CALLSIGN_PIXEL_W pixels
 	int				short_callsign_width;					// useful for mutliplayer chat boxes.
 	char				image_filename[MAX_FILENAME_LEN];	// filename of the image for this pilot
-	char				squad_filename[MAX_FILENAME_LEN];	// filename of the squad image for this pilot
-	char				squad_name[NAME_LENGTH + 1];			// pilot's squadron name
+	char				s_squad_filename[MAX_FILENAME_LEN];	// filename of the squad image for this pilot
+	char				s_squad_name[NAME_LENGTH + 1];			// pilot's squadron name
+	char				m_squad_filename[MAX_FILENAME_LEN];	// filename of the squad image for this pilot (multiplayer)
+	char				m_squad_name[NAME_LENGTH + 1];			// pilot's squadron name (multiplayer)
 	char				current_campaign[MAX_FILENAME_LEN]; // Name of the currently active campaign, or zero-length string if none
 	int				readyroom_listing_mode;
 
@@ -205,7 +209,7 @@ typedef struct player {
 	button_info		lua_bi_full;		// gets all the button controls, not just the ones usually allowed
 
 	int		player_was_multi;		// 1 if the player file was last used in Multiplayer
-} player;
+};
 
 extern player Players[MAX_PLAYERS];
 
@@ -240,7 +244,7 @@ void player_stop_cargo_scan_sound();
 void player_maybe_start_cargo_scan_sound();
 
 // will attempt to load an insignia bitmap and set it as active for the player
-void player_set_squad_bitmap(player *p, char *fname);
+void player_set_squad_bitmap(player *p, char *fnamem, bool ismulti);
 
 // set squadron
 void player_set_squad(player *p, char *squad_name);

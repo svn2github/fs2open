@@ -96,7 +96,7 @@ int get_char_width(ubyte c1,ubyte c2,int *width,int *spacing)
 
 			if ((letter2>=0) && (letter2<Current_font->num_chars) ) {				//not in font, draw as space
 				font_kernpair	*k = &Current_font->kern_data[i];
-				while( (k->c1 == (char)letter) && (k->c2<(char)letter2) && (i<Current_font->num_kern_pairs) )	{
+				while( (k->c1 == (char)letter) && (k->c2<(char)letter2) && (i<Current_font->num_kern_pairs-1) )	{
 					i++;
 					k++;
 				}
@@ -241,7 +241,7 @@ MONITOR( FontChars )
 HFONT MyhFont = NULL;
 HDC hDibDC = NULL;
 
-void gr_string_win(int x, int y, char *s)
+void gr_string_win(int x, int y, const char *s)
 {
 	int old_bitmap = gr_screen.current_bitmap; 
 	gr_set_font(FONT1);
@@ -249,9 +249,9 @@ void gr_string_win(int x, int y, char *s)
 	gr_screen.current_bitmap = old_bitmap; 
 }
 
-void gr_get_string_size_win(int *w, int *h, char *text)
+void gr_get_string_size_win(int *w, int *h, const char *text)
 {
-	char *ptr;
+	const char *ptr;
 	SIZE size;
 
 	ptr = strchr(text, '\n');
@@ -283,7 +283,7 @@ void gr_get_string_size_win(int *w, int *h, char *text)
 
 char grx_printf_text[2048];	
 
-void _cdecl gr_printf( int x, int y, char * format, ... )
+void _cdecl gr_printf( int x, int y, const char * format, ... )
 {
 	va_list args;
 
@@ -296,7 +296,7 @@ void _cdecl gr_printf( int x, int y, char * format, ... )
 	gr_string(x,y,grx_printf_text);
 }
 
-void _cdecl gr_printf_no_resize( int x, int y, char * format, ... )
+void _cdecl gr_printf_no_resize( int x, int y, const char * format, ... )
 {
 	va_list args;
 

@@ -41,8 +41,10 @@ SCP_vector<cutscene_info> Cutscenes;
 void cutscene_close()
 {
 	for(SCP_vector<cutscene_info>::iterator cut = Cutscenes.begin(); cut != Cutscenes.end(); ++cut)
-		if(cut->description)
+		if(cut->description != NULL) {
 			vm_free(cut->description);
+			cut->description = NULL;
+		}
 }
 
 // initialization stuff for cutscenes
@@ -252,7 +254,7 @@ int Cutscene_max_text_lines[GR_NUM_RESOLUTIONS] = {
 static int Text_size;
 static int Text_offset = 0;
 static int Text_line_size[MAX_TEXT_LINES];
-static char *Text_lines[MAX_TEXT_LINES];
+static const char *Text_lines[MAX_TEXT_LINES];
 
 
 int cutscenes_validate_cd(char *mve_name, int prompt_for_cd)
