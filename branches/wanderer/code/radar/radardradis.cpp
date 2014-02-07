@@ -172,9 +172,6 @@ void HudGaugeRadarDradis::drawContact(vec3d *pnt, int idx, float dist, float alp
 
 	float sizef = fl_sqrt(vm_vec_dist(&Orb_eye_position, pnt) * 8.0f) * scale;
 
-	matrix flip = vmd_identity_matrix;
-	flip.vec.uvec.xyz.y = -1.0;
-
 	gr_set_bitmap(idx, GR_ALPHABLEND_FILTER, GR_BITBLT_MODE_NORMAL, alpha);
 	g3_draw_polygon(&p, &vmd_identity_matrix, sizef/35.0f, aspect_mp*sizef/35.0f, TMAP_FLAG_TEXTURED | TMAP_HTL_3D_UNLIT);
 }
@@ -301,7 +298,7 @@ void HudGaugeRadarDradis::setupViewHtl()
 	gr_set_proj_matrix(.625f * PI_2, i2fl(Radar_radius[0])/i2fl(Radar_radius[1]), 0.001f, 5.0f);
 	gr_set_view_matrix(&Orb_eye_position, &vmd_identity_matrix);
 
-	gr_zbuffer_set(0);
+	gr_zbuffer_set(GR_ZBUFF_NONE);
 }
 
 void HudGaugeRadarDradis::doneDrawingHtl()
@@ -311,7 +308,7 @@ void HudGaugeRadarDradis::doneDrawingHtl()
 	
 	//hud_save_restore_camera_data(0);
 
-	gr_zbuffer_set(1);
+	gr_zbuffer_set(GR_ZBUFF_FULL);
 }
 
 void HudGaugeRadarDradis::drawOutlinesHtl()

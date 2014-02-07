@@ -1725,6 +1725,8 @@ int parse_create_object(p_object *pobjp)
 	return OBJ_INDEX(objp);
 }
 
+void parse_bring_in_docked_wing(p_object *p_objp, int wingnum, int shipnum);
+
 /**
  * Given a stuffed p_object struct, create an object and fill in the necessary fields.
  * @return object number.
@@ -1754,7 +1756,15 @@ int parse_create_object_sub(p_object *p_objp)
 
 	// Goober5000 - make the parse object aware of what it was created as
 	p_objp->created_object = &Objects[objnum];
-	
+
+	// Goober5000 - if this object is being created because he's docked to something,
+	// and he's in a wing, then mark the wing as having arrived
+	if (object_is_docked(p_objp) && !(p_objp->flags & P_SF_DOCK_LEADER) && (p_objp->wingnum >= 0))
+	{
+		if (!Fred_running)
+			parse_bring_in_docked_wing(p_objp, p_objp->wingnum, shipnum);
+	}
+
 	// if arriving through knossos, adjust objpj->pos to plane of knossos and set flag
 	// special warp is single player only
 	if ((p_objp->flags & P_KNOSSOS_WARP_IN) && !(Game_mode & GM_MULTIPLAYER))
@@ -2172,7 +2182,7 @@ int parse_create_object_sub(p_object *p_objp)
 					ptr->weapons.ai_class = sssp->ai_class;
 
 				ptr->turret_best_weapon = -1;
-				ptr->turret_animation_position = 0;	// MA_POS_NOT_SET -> model animation position is not set
+				ptr->turret_animation_position = MA_POS_NOT_SET;	// model animation position is not set
 				ptr->turret_animation_done_time = 0;
 			}
 
@@ -2285,6 +2295,75 @@ int parse_create_object_sub(p_object *p_objp)
 	}
 
 	return objnum;
+}
+
+/**
+ * There are a bunch of assumptions in the code that, in FS2, the wing will be created first, and
+ * then it will create its component ships.  If a wing arrives because all its ships were docked
+ * to something else, these assumptions are turned inside out.  So we have to sort of bootstrap
+ * the creation of the wing by running a subset of the code from parse_wing_create_ships().
+ */
+void parse_bring_in_docked_wing(p_object *p_objp, int wingnum, int shipnum)
+{
+	Assert(!Fred_running);
+	Assert(p_objp != NULL);
+	Assert(wingnum >= 0);
+	Assert(shipnum >= 0);
+	int j, index;
+	wing *wingp = &Wings[wingnum];
+
+	// link ship and wing together
+	// (do this first because mission log relies on ship_index
+	// and hud_wingman_status_set_index relies on ship's wingnum)
+	wingp->ship_index[p_objp->pos_in_wing] = shipnum;
+	Ships[shipnum].wingnum = wingnum;
+
+	// has this wing arrived at all yet?
+	if (wingp->current_wave == 0)
+	{
+		wingp->current_wave++;
+		mission_log_add_entry( LOG_WING_ARRIVED, wingp->name, NULL, wingp->current_wave );
+		wingp->wave_delay_timestamp = timestamp(-1);
+	}
+	// how did we get more than one wave here?
+	else if (wingp->current_wave > 1)
+		Error(LOCATION, "Wing %s was created from docked ships but somehow has more than one wave!", wingp->name);
+
+	// increment tallies
+	wingp->total_arrived_count++;
+	wingp->current_count++;
+	// make sure we haven't created too many ships
+	Assert(wingp->current_count <= MAX_SHIPS_PER_WING);
+
+	// at this point the wing has arrived, so handle the stuff for this particular ship
+
+	// set up wingman status index
+	hud_wingman_status_set_index(shipnum);
+
+	// copy to parse object
+	p_objp->wing_status_wing_index = Ships[shipnum].wing_status_wing_index;
+	p_objp->wing_status_wing_pos = Ships[shipnum].wing_status_wing_pos;
+
+	// set flag if necessary
+	for (j = 0; j < MAX_STARTING_WINGS; j++)
+	{
+		if (!stricmp(Starting_wing_names[j], wingp->name))
+			Ships[shipnum].flags |= SF_FROM_PLAYER_WING;
+	}
+
+	// handle AI
+	ai_info *aip = &Ai_info[Ships[shipnum].ai_index];
+	aip->wing = wingnum;
+
+	if (wingp->flags & WF_NO_DYNAMIC)
+		aip->ai_flags |= AIF_NO_DYNAMIC;
+
+	// copy any goals from the wing to the newly created ship
+	for (index = 0; index < MAX_AI_GOALS; index++)
+	{
+		if (wingp->ai_goals[index].ai_mode != AI_GOAL_NONE)
+			ai_copy_mission_wing_goal(&wingp->ai_goals[index], aip);
+	}
 }
 
 // Goober5000
@@ -3144,7 +3223,6 @@ int parse_object(mission *pm, int flag, p_object *p_objp)
 void mission_parse_handle_late_arrivals(p_object *p_objp)
 {
 	ship_info *sip = NULL;
-	polymodel *pm = NULL;
 	model_subsystem *subsystems = NULL;
 
 	// only for objects which show up after the start of a mission
@@ -3161,8 +3239,6 @@ void mission_parse_handle_late_arrivals(p_object *p_objp)
 
 	// we need the model to process the texture set, so go ahead and load it now
 	sip->model_num = model_load(sip->pof_file, sip->n_subsystems, subsystems);
-
-	pm = model_get(sip->model_num);
 }
 
 // Goober5000 - I split this because 1) it's clearer; and 2) initially multiple docked ships would have been
@@ -3943,10 +4019,18 @@ int parse_wing_create_ships( wing *wingp, int num_to_create, int force, int spec
 	// possibly play some event driven music here.  Send a network packet indicating the wing was
 	// created.  Only do this stuff if actually in the mission.
 	if ( (objnum != -1) && (Game_mode & GM_IN_MISSION) ) {		// if true, we have created at least one new ship.
-		int ship_num;
+		int i, ship_num;
 
-		// Goober5000 - make all wings form on their respective leaders
-		ai_maybe_add_form_goal( wingp );
+		// see if this wing is a player starting wing, and if so, call the maybe_add_form_goal
+		// function to possibly make the wing form on the player
+		for (i = 0; i < MAX_STARTING_WINGS; i++ ) {
+			if ( Starting_wings[i] == wingnum ){
+				break;
+			}
+		}
+		if ( i < MAX_STARTING_WINGS ){
+			ai_maybe_add_form_goal( wingp );
+		}
 
 		mission_log_add_entry( LOG_WING_ARRIVED, wingp->name, NULL, wingp->current_wave );
 		ship_num = wingp->ship_index[0];
@@ -3993,7 +4077,7 @@ int parse_wing_create_ships( wing *wingp, int num_to_create, int force, int spec
 
 void parse_wing(mission *pm)
 {
-	int wingnum, i, wing_goals, delay;
+	int wingnum, i, wing_goals, delay, saved_arrival_delay;
 	char name[NAME_LENGTH], ship_names[MAX_SHIPS_PER_WING][NAME_LENGTH];
 	char wing_flag_strings[MAX_WING_FLAGS][NAME_LENGTH];
 	wing *wingp;
@@ -4100,6 +4184,7 @@ void parse_wing(mission *pm)
 			Error(LOCATION, "Cannot have arrival delay < 0 on wing %s", wingp->name );
 	} else
 		delay = 0;
+	saved_arrival_delay = delay;
 
 	if ( !Fred_running ){
 		wingp->arrival_delay = -delay;
@@ -4259,11 +4344,10 @@ void parse_wing(mission *pm)
 	// into the sexpression array of each goal (max 10).  When a ship in this wing is created, each
 	// goal in the wings goal array is given to the ship.
 	if ( wing_goals != -1 ) {
-		int sexp, index;
+		int sexp;
 
 		// this will assign the goals to the wings as well as to any ships in the wing that have been
 		// already created.
-		index = 0;
 		for ( sexp = CDR(wing_goals); sexp != -1; sexp = CDR(sexp) )
 			ai_add_wing_goal_sexp(sexp, AIG_TYPE_EVENT_WING, wingnum);  // used by Fred
 
@@ -4284,10 +4368,24 @@ void parse_wing(mission *pm)
 				// get Allender -- ship appears to be in multiple wings
 				Assert (p_objp->wingnum == -1);
 
+				// assign wingnum
 				p_objp->wingnum = wingnum;
 				p_objp->pos_in_wing = i;
-
 				assigned++;
+
+				// Goober5000 - if this is a player start object, there shouldn't be a wing arrival delay (Mantis #2678)
+				if ((p_objp->flags & P_OF_PLAYER_START) && (saved_arrival_delay != 0)) {
+					Warning(LOCATION, "Wing %s specifies an arrival delay of %ds, but it also contains a player.  The arrival delay will be reset to 0.", wingp->name, saved_arrival_delay);
+					if (!Fred_running && wingp->arrival_delay > 0) {
+						// timestamp has been set, so set it again
+						wingp->arrival_delay = timestamp(0);
+					} else {
+						// no timestamp, or timestamp invalid
+						wingp->arrival_delay = 0;
+					}
+					// prevent message from reappearing
+					saved_arrival_delay = 0;
+				}
 			}
 		}
 
@@ -5405,6 +5503,7 @@ void post_process_mission()
 				SCP_string error_msg;
 
 				convert_sexp_to_string(sexp_str, i, SEXP_ERROR_CHECK_MODE);
+				truncate_message_lines(sexp_str, 30);
 				sprintf(error_msg, "%s.\n\nIn sexpression: %s\n(Error appears to be: %s)", sexp_error_message(result), sexp_str.c_str(), Sexp_nodes[bad_node].text);
 
 				if (!Fred_running) {
@@ -5430,7 +5529,7 @@ void post_process_mission()
 	// their SF_IGNORE_COUNT flag set.  We don't count ships in wings when the equivalent wing flag is set.
 	// in counting ships in wings, we increment the count by the wing's wave count to account for everyone.
 	for ( so = GET_FIRST(&Ship_obj_list); so != END_OF_LIST(&Ship_obj_list); so = GET_NEXT(so) ) {
-		int siflags, num, shipnum;
+		int num, shipnum;
 
 		shipnum = Objects[so->objnum].instance;
 		// pass over non-ship objects and player ship objects
@@ -5441,7 +5540,6 @@ void post_process_mission()
 		if ( (Ships[shipnum].wingnum != -1) && (Wings[Ships[shipnum].wingnum].flags & WF_IGNORE_COUNT) )
 			continue;
 
-		siflags = Ship_info[Ships[shipnum].ship_info_index].flags;
 		num = 1;
 
 		ship_add_ship_type_count( Ships[shipnum].ship_info_index, num );
@@ -5450,15 +5548,13 @@ void post_process_mission()
 	// now go through the list of ships yet to arrive
 	for (p_object *p_objp = GET_FIRST(&Ship_arrival_list); p_objp != END_OF_LIST(&Ship_arrival_list); p_objp = GET_NEXT(p_objp))
 	{
-		int siflags, num;
+		int num;
 
 		// go through similar motions as above
 		if ( p_objp->flags & P_SF_IGNORE_COUNT )
 			continue;
 		if ( (p_objp->wingnum != -1) && (Wings[p_objp->wingnum].flags & WF_IGNORE_COUNT) )
 			continue;
-
-		siflags = Ship_info[p_objp->ship_class].flags;
 
 		if ( p_objp->wingnum == -1 )
 			num = 1;
@@ -5789,6 +5885,34 @@ bool sexp_is_locked_false(int node)
 		return (Sexp_nodes[node].value == SEXP_KNOWN_FALSE);
 }
 
+void set_cue_to_false(int *cue)
+{
+	free_sexp2(*cue);
+	*cue = Locked_sexp_false;
+}
+
+// function to set the arrival cue of a ship to false
+void reset_arrival_to_false(p_object *pobjp, bool reset_wing)
+{
+	// falsify the ship cue
+	mprintf(("Setting arrival cue of ship %s to false for initial docking purposes.\n", pobjp->name));
+	set_cue_to_false(&pobjp->arrival_cue);
+
+	// falsify the wing cue and all ships in that wing
+	if (reset_wing && pobjp->wingnum >= 0)
+	{
+		wing *wingp = &Wings[pobjp->wingnum];
+		mprintf(("Setting arrival cue of wing %s to false for initial docking purposes.\n", wingp->name));
+		set_cue_to_false(&wingp->arrival_cue);
+
+		for (SCP_vector<p_object>::iterator ii = Parse_objects.begin(); ii != Parse_objects.end(); ++ii)
+		{
+			if ((&(*ii) != pobjp) && (ii->wingnum == pobjp->wingnum))
+				reset_arrival_to_false(&(*ii), false);
+		}
+	}
+}
+
 /**
  * In both retail and SCP, the dock "leader" is defined as the only guy in his
  * group with a non-false arrival cue
@@ -5821,18 +5945,16 @@ void parse_object_mark_dock_leader_helper(p_object *pobjp, p_dock_function_info 
 		if (existing_leader != NULL)
 		{
 			// keep existing leader if he has a higher priority than us
-			if (ship_class_compare(pobjp->ship_class, existing_leader->ship_class) < 0)
+			if (ship_class_compare(pobjp->ship_class, existing_leader->ship_class) >= 0)
 			{
 				// set my arrival cue to false
-				free_sexp2(pobjp->arrival_cue);
-				pobjp->arrival_cue = Locked_sexp_false;
+				reset_arrival_to_false(pobjp, true);
 				return;
 			}
 
 			// otherwise, unmark the existing leader and set his arrival cue to false
 			existing_leader->flags &= ~P_SF_DOCK_LEADER;
-			free_sexp2(existing_leader->arrival_cue);
-			existing_leader->arrival_cue = Locked_sexp_false;
+			reset_arrival_to_false(existing_leader, true);
 		}
 
 		// mark and save me as the leader
@@ -5890,18 +6012,43 @@ void mission_parse_set_up_initial_docks()
 
 		// resolve the docker and dockee
 		docker = mission_parse_get_parse_object(Initially_docked[i].docker);
+		if (docker == NULL)
+		{
+			Warning(LOCATION, "Could not resolve initially docked object '%s'!", Initially_docked[i].docker);
+			continue;
+		}
 		dockee = mission_parse_get_parse_object(Initially_docked[i].dockee);
-		Assert((docker != NULL) && (dockee != NULL));
+		if (dockee == NULL)
+		{
+			Warning(LOCATION, "Could not resolve docking target '%s' of initially docked object '%s'!", Initially_docked[i].dockee, Initially_docked[i].docker);
+			continue;
+		}
+
+		// skip docking if they're already docked
+		// (in FSO, we list all initially docked pairs for all ships,
+		// so we end up with twice as many docking entries as we need)
+		if (dock_check_find_direct_docked_object(docker, dockee))
+			continue;
 
 		// resolve the dockpoints
 		docker_point = Initially_docked[i].docker_point;
 		dockee_point = Initially_docked[i].dockee_point;
 
-		// if they're not already docked, dock them
-		if (!dock_check_find_direct_docked_object(docker, dockee))
+		// docker point in use?
+		if (dock_find_object_at_dockpoint(docker, docker_point) != NULL)
 		{
-			dock_dock_objects(docker, docker_point, dockee, dockee_point);
+			Warning(LOCATION, "Trying to initially dock '%s' and '%s', but the former's dockpoint is already in use!", Initially_docked[i].docker, Initially_docked[i].dockee);
+			continue;
 		}
+
+		// dockee point in use?
+		if (dock_find_object_at_dockpoint(dockee, dockee_point) != NULL)
+		{
+			Warning(LOCATION, "Trying to initially dock '%s' and '%s', but the latter's dockpoint is already in use!", Initially_docked[i].docker, Initially_docked[i].dockee);
+			continue;
+		}
+
+		dock_dock_objects(docker, docker_point, dockee, dockee_point);
 	}
 
 	// now resolve the leader of each tree
@@ -6122,7 +6269,7 @@ int mission_set_arrival_location(int anchor, int location, int dist, int objnum,
 		if ( dist <= 0 )
 		{
 			// Goober5000 - default to 100
-			Error(LOCATION, "Distance of %d is invalid in mission_set_arrival_location.  Defaulting to 100.\n", dist);
+			Warning(LOCATION, "Distance of %d is invalid in mission_set_arrival_location.  Defaulting to 100.\n", dist);
 			dist = 100;
 		}
 		
@@ -6355,7 +6502,7 @@ void mission_parse_mark_non_arrivals()
 	{
 		if (p_objp->wingnum != -1)
 		{
-			if (Sexp_nodes[Wings[p_objp->wingnum].arrival_cue].value == SEXP_KNOWN_FALSE)
+			if (!object_is_docked(p_objp) && (Sexp_nodes[Wings[p_objp->wingnum].arrival_cue].value == SEXP_KNOWN_FALSE))
 				p_objp->flags |= P_SF_CANNOT_ARRIVE;
 		}
 		else
@@ -6567,7 +6714,7 @@ void mission_eval_arrivals()
 					// see if this wing has an arrival message associated with it
 					for (j = 0; j < MAX_BUILTIN_MESSAGE_TYPES; j++)
 					{
-						if (!stricmp(message_name, Builtin_message_types[j]))
+						if (!stricmp(message_name, Builtin_messages[j].name))
 						{
 							message_send_builtin_to_player(j, &Ships[rship], MESSAGE_PRIORITY_LOW, MESSAGE_TIME_SOON, 0, 0, -1, -1);
 							break;

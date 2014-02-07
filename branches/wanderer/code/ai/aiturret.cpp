@@ -1107,10 +1107,8 @@ DCF_BOOL(use_parent_target, Use_parent_target)
 int find_turret_enemy(ship_subsys *turret_subsys, int objnum, vec3d *tpos, vec3d *tvec, int current_enemy)
 {
 	int					enemy_team_mask, enemy_objnum;
-	model_subsystem	*tp;
 	ship_info			*sip;
 
-	tp = turret_subsys->system_info;
 	enemy_team_mask = iff_get_attackee_mask(obj_team(&Objects[objnum]));
 
 	bool big_only_flag = all_turret_weapons_have_flags(&turret_subsys->weapons, WIF_HUGE);
@@ -2246,11 +2244,13 @@ void ai_fire_from_turret(ship *shipp, ship_subsys *ss, int parent_objnum)
 		if (objnum >= 0 && is_target_beam_valid(&ss->weapons, &Objects[objnum])) {
 			if (ss->turret_enemy_objnum == -1) {
 				ss->turret_enemy_objnum = objnum;
+				ss->targeted_subsys = NULL;		// Turret has retargeted; reset subsystem - Valathil for Mantis #2652
 				ss->turret_enemy_sig = Objects[objnum].signature;
 				// why return?
 				return;
 			} else {
 				ss->turret_enemy_objnum = objnum;
+				ss->targeted_subsys = NULL;		// Turret has retargeted; reset subsystem - Valathil for Mantis #2652
 				ss->turret_enemy_sig = Objects[objnum].signature;
 			}
 		} else {

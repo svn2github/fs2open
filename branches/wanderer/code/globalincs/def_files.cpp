@@ -109,22 +109,26 @@ char *Default_mod_table = "\
 ;; Sets default campaign file the game will look for with new pilots	\n\
 $Default Campaign File Name: FreeSpace2									\n\
 																		\n\
+																		\n\
 #HUD SETTINGS															\n\
 																		\n\
 ;; Sets the delay before a directive will appear on the screen (ms)		\n\
 $directive wait time: 3000												\n\
 																		\n\
+																		\n\
 #SEXP SETTINGS															\n\
 																		\n\
-;; When set this makes the argument SEXPs loop through all the SEXPs	\n\
+;; When set, this makes the argument SEXPs loop through all the SEXPs	\n\
 ;; before it moves on to the next argument. Default behaviour is the 	\n\
 ;; exact opposite, each SEXP is called for all arguments.				\n\
 $Loop SEXPs Then Arguments:	NO											\n\
 																		\n\
-#OTHER SETTINGS															\n\
+;; When set, this makes the event chaining behavior act as people		\n\
+;; expected it to be in Mantis #82.										\n\
+$Use Alternate Chaining Behavior: NO									\n\
 																		\n\
-;; The percentage chance that a pilot will brag about his kills			\n\
-$Self Praise Percentage: 10												\n\
+																		\n\
+#OTHER SETTINGS															\n\
 																		\n\
 #END																	\n\
 ";

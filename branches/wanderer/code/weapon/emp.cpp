@@ -259,16 +259,16 @@ void emp_apply(vec3d *pos, float inner_radius, float outer_radius, float emp_int
 
 // start the emp effect for the passed ship (setup lightning arcs, timestamp, etc)
 // NOTE : if this ship is also me, I should call emp_start_local() as well
-void emp_start_ship(object *ship_obj, float intensity, float time)
+void emp_start_ship(object *ship_objp, float intensity, float time)
 {
 	ship *shipp;
 	ai_info *aip;
 	float start_intensity;
 
 	// make sure this is a ship
-	Assert(ship_obj->type == OBJ_SHIP);
-	Assert(ship_obj->instance >= 0);
-	shipp = &Ships[ship_obj->instance];
+	Assert(ship_objp->type == OBJ_SHIP);
+	Assert(ship_objp->instance >= 0);
+	shipp = &Ships[ship_objp->instance];
 
 	// determining pre-existing EMP intensity (if any)
 	start_intensity = shipp->emp_intensity < 0.0f ? 0.0f : shipp->emp_intensity;
@@ -350,13 +350,18 @@ void emp_process_ship(ship *shipp)
 	if(!(Ship_info[shipp->ship_info_index].flags & (SIF_FIGHTER | SIF_BOMBER))){
 		return;
 	}
+
+	// if he's docked, or ordered to not move, bail now
+	if (object_is_docked(objp) || (aip->mode == AIM_STILL) || (aip->mode == AIM_PLAY_DEAD)){
+		return;
+	}
 	
 	// pick targets randomly and wackily so that the ship flies crazily :)	
 	if(((int)f2fl(Missiontime) + (int)(EMP_INTENSITY_MAX * shipp->emp_intensity)) % mod_val == 0){
 		int ship_lookup = ship_get_random_team_ship(iff_get_attackee_mask(shipp->team));
 
 		// if we got a valid ship object to target
-		if((ship_lookup >= 0) && (Ships[ship_lookup].objnum >= 0)){
+		if((ship_lookup >= 0) && (Ships[ship_lookup].objnum >= 0) && !(Objects[Ships[ship_lookup].objnum].flags & OF_PROTECTED)){
 			// attack the object
 			ai_attack_object(objp, &Objects[Ships[ship_lookup].objnum], NULL);
 		}

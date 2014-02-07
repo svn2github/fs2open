@@ -1084,13 +1084,13 @@ void wss_direct_restore_loadout()
 			p_object *p_objp;
 			j=0;
 			for ( p_objp = GET_FIRST(&Ship_arrival_list); p_objp != END_OF_LIST(&Ship_arrival_list); p_objp = GET_NEXT(p_objp) ) {
-				// niffiwan: don't overrun the array
-				if (j >= MAX_WING_SLOTS) {
-					Warning(LOCATION, "Starting Wing '%s' has more than 'MAX_WING_SLOTS' ships\n", Starting_wing_names[i]);
-					break;
-				}
 				slot = &Player_loadout.unit_data[valid_wing_index*MAX_WING_SLOTS+j];
 				if ( p_objp->wingnum == WING_INDEX(wp) ) {
+					// niffiwan: don't overrun the array
+					if (j >= MAX_WING_SLOTS) {
+						Warning(LOCATION, "Starting Wing '%s' has more than 'MAX_WING_SLOTS' ships\n", Starting_wing_names[i]);
+						break;
+					}
 					p_objp->ship_class = slot->ship_class;
 					wl_update_parse_object_weapons(p_objp, slot);
 					j++;
@@ -1495,14 +1495,17 @@ void draw_model_icon(int model_id, int flags, float closeup_zoom, int x, int y, 
 		light_rotate_all();
 	}
 
+	Glowpoint_override = true;
 	model_clear_instance(model_id);
 	model_render(model_id, &object_orient, &vmd_zero_vector, flags, -1, -1);
+	Glowpoint_override = false;
 
 	if (!Cmdline_nohtl) 
 	{
 		gr_end_view_matrix();
 		gr_end_proj_matrix();
 	}
+
 
 	g3_end_frame();
 	gr_reset_clip();
@@ -1601,7 +1604,8 @@ void draw_model_rotating(int model_id, int x1, int y1, int x2, int y2, float *ro
 		}
 		g3_done_instance(true);
 
-		gr_zbuffer_set(false); // Turn of Depthbuffer so we dont get gridlines over the ship or a disappearing scanline 
+		gr_zbuffer_set(GR_ZBUFF_NONE); // Turn of Depthbuffer so we dont get gridlines over the ship or a disappearing scanline 
+		Glowpoint_use_depth_buffer = false; // Since we don't have one
 		if (time >= 0.5f) { // Phase 1 onward draw the grid
 			int i;
 			start.xyz.y = -offset;
@@ -1669,7 +1673,11 @@ void draw_model_rotating(int model_id, int x1, int y1, int x2, int y2, float *ro
 			}
 		}
 
-		gr_zbuffer_set(true); // Turn of depthbuffer again
+		gr_zbuffer_set(GR_ZBUFF_FULL); // Turn of depthbuffer again
+
+		batch_render_all();
+		Glowpoint_use_depth_buffer = true; // Back to normal
+
 		gr_end_view_matrix();
 		gr_end_proj_matrix();
 		g3_end_frame();
@@ -1693,10 +1701,6 @@ void draw_model_rotating(int model_id, int x1, int y1, int x2, int y2, float *ro
 		vm_rotate_matrix_by_angles(&model_orient, &rot_angles);
 
 		gr_set_clip(x1, y1, x2, y2, resize);
-		vec3d normal;
-		normal.xyz.x = 0.0f;
-		normal.xyz.y = 1.0f;
-		normal.xyz.z = 0.0f;
 		g3_start_frame(1);
 
 		// render the wodel
@@ -1730,6 +1734,8 @@ void draw_model_rotating(int model_id, int x1, int y1, int x2, int y2, float *ro
 		} else {
 			model_render(model_id, &model_orient, &vmd_zero_vector, flags);
 		}
+
+		batch_render_all();
 
 		gr_end_view_matrix();
 		gr_end_proj_matrix();

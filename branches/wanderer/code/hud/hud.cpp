@@ -290,7 +290,7 @@ static int Damage_flash_bright;
 static int Damage_flash_timer;
 
 HudGauge::HudGauge():
-base_w(0), base_h(0), gauge_config(-1), font_num(FONT1), reticle_follow(false), lock_color(false), sexp_lock_color(false),
+base_w(0), base_h(0), gauge_config(-1), font_num(FONT1), lock_color(false), sexp_lock_color(false), reticle_follow(false), 
 active(false), off_by_default(false), sexp_override(false), pop_up(false), disabled_views(0), custom_gauge(false),
 texture_target(-1), canvas_w(-1), canvas_h(-1), target_w(-1), target_h(-1)
 {
@@ -307,15 +307,15 @@ texture_target(-1), canvas_w(-1), canvas_h(-1), target_w(-1), target_h(-1)
 	texture_target_fname[0] = '\0';
 
 	custom_name[0] = '\0';
-	custom_text.clear();
+	custom_text = "";
 	custom_frame.first_frame = -1;
 	custom_frame.num_frames = 0;
 	custom_frame_offset = 0;
 }
 
 HudGauge::HudGauge(int _gauge_object, int _gauge_config, bool _slew, bool _message, int _disabled_views, int r, int g, int b):
-base_w(0), base_h(0), gauge_config(_gauge_config), gauge_object(_gauge_object), font_num(FONT1),
-reticle_follow(_slew), lock_color(false), sexp_lock_color(false), active(false), off_by_default(false), sexp_override(false), pop_up(false), message_gauge(_message),
+base_w(0), base_h(0), gauge_config(_gauge_config), gauge_object(_gauge_object), font_num(FONT1), lock_color(false), sexp_lock_color(false),
+reticle_follow(_slew), active(false), off_by_default(false), sexp_override(false), pop_up(false), message_gauge(_message),
 disabled_views(_disabled_views), custom_gauge(false), textoffset_x(0), textoffset_y(0), texture_target(-1),
 canvas_w(-1), canvas_h(-1), target_w(-1), target_h(-1)
 {
@@ -341,8 +341,8 @@ canvas_w(-1), canvas_h(-1), target_w(-1), target_h(-1)
 	texture_target_fname[0] = '\0';
 
 	custom_name[0] = '\0';
-	custom_text.clear();
-	default_text.clear();
+	custom_text = "";
+	default_text = "";
 	custom_frame.first_frame = -1;
 	custom_frame.num_frames = 0;
 	custom_frame_offset = 0;
@@ -350,8 +350,8 @@ canvas_w(-1), canvas_h(-1), target_w(-1), target_h(-1)
 
 // constructor for custom gauges
 HudGauge::HudGauge(int _gauge_config, bool _slew, int r, int g, int b, char* _custom_name, char* _custom_text, char* frame_fname, int txtoffset_x, int txtoffset_y):
-base_w(0), base_h(0), gauge_config(_gauge_config), gauge_object(HUD_OBJECT_CUSTOM), font_num(FONT1), 
-reticle_follow(_slew), lock_color(false), sexp_lock_color(false), active(false), off_by_default(false), sexp_override(false), pop_up(false), message_gauge(false),
+base_w(0), base_h(0), gauge_config(_gauge_config), gauge_object(HUD_OBJECT_CUSTOM), font_num(FONT1), lock_color(false), sexp_lock_color(false), 
+reticle_follow(_slew), active(false), off_by_default(false), sexp_override(false), pop_up(false), message_gauge(false),
 disabled_views(VM_EXTERNAL | VM_DEAD_VIEW | VM_WARP_CHASE | VM_PADLOCK_ANY), custom_gauge(true), textoffset_x(txtoffset_x),
  textoffset_y(txtoffset_y), texture_target(-1), canvas_w(-1), canvas_h(-1), target_w(-1), target_h(-1)
 {
@@ -382,8 +382,8 @@ disabled_views(VM_EXTERNAL | VM_DEAD_VIEW | VM_WARP_CHASE | VM_PADLOCK_ANY), cus
 		custom_text = _custom_text;
 		default_text = _custom_text;
 	} else {
-		custom_text.clear();
-		default_text.clear();
+		custom_text = "";
+		default_text = "";
 	}
 
 	custom_frame.first_frame = -1;
@@ -1971,7 +1971,6 @@ void HudGaugeDamage::render(float frametime)
 {
 	model_subsystem	*psub;
 	ship_subsys			*pss;
-	ship_info			*sip;
 	int					sx, sy, bx, by, w, h, screen_integrity, num, best_str, best_index;
 	float					strength, shield, integrity;
 	char					buf[128];
@@ -1989,7 +1988,6 @@ void HudGaugeDamage::render(float frametime)
 		return;
 	}
 		
-	sip = &Ship_info[Player_ship->ship_info_index];
 	hud_get_target_strength(Player_obj, &shield, &integrity);
 	screen_integrity = fl2i(integrity*100);
 
@@ -3385,7 +3383,7 @@ void HudGaugeObjectiveNotify::renderRedAlert()
 	// Blit the background
 	gr_set_color_fast(&Color_red);		// Color box red, because it's an emergency
 
-	GR_AABITMAP(Objective_display_gauge.first_frame, position[0], position[1]);	
+	renderBitmap(Objective_display_gauge.first_frame, position[0], position[1]);
 
 	startFlashNotify();
 	if(maybeFlashNotify()) {

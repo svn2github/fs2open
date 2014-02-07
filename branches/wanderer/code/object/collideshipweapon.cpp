@@ -229,9 +229,10 @@ int ship_weapon_check_collision(object *ship_objp, object *weapon_objp, float ti
 				} else {
 					add_shield_point(OBJ_INDEX(ship_objp), mc_shield.shield_hit_tri, &mc_shield.hit_point);
 				}
-			else
-				/* TODO */;
-
+			else {
+				/* TODO */
+            }
+            
 			// if this weapon pierces the shield, then do the hit effect, but act like a shield collision never occurred;
 			// otherwise, we have a valid hit on this shield
 			if (wip->wi_flags2 & WIF2_PIERCE_SHIELDS)
@@ -268,7 +269,7 @@ int ship_weapon_check_collision(object *ship_objp, object *weapon_objp, float ti
 
         if (vm_vec_dot(&hit_direction, &warp_orient.vec.fvec) < 0.0f)
         {
-             valid_hit_occurred = false;
+             valid_hit_occurred = 0;
         }
     }
 

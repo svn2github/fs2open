@@ -65,25 +65,25 @@ static opengl_shader_file_t GL_post_shader_files[] = {
 	// NOTE: the main post-processing shader has any number of uniforms, but
 	//       these few should always be present
 	{ "post-v.sdr", "post-f.sdr", SDR_POST_FLAG_MAIN,
-		4, { "tex", "timer", "bloomed", "bloom_intensity" } },
+		4, { "tex", "timer", "bloomed", "bloom_intensity" }, 0, { NULL } },
 
 	{ "post-v.sdr", "blur-f.sdr", SDR_POST_FLAG_BLUR | SDR_POST_FLAG_PASS1,
-		2, { "tex", "bsize" } },
+		2, { "tex", "bsize" }, 0, { NULL } },
 
 	{ "post-v.sdr", "blur-f.sdr", SDR_POST_FLAG_BLUR | SDR_POST_FLAG_PASS2,
-		2, { "tex", "bsize" } },
+		2, { "tex", "bsize" }, 0, { NULL } },
 
 	{ "post-v.sdr", "brightpass-f.sdr", SDR_POST_FLAG_BRIGHT,
-		1, { "tex" } },
+		1, { "tex" }, 0, { NULL } },
 
 	{ "fxaa-v.sdr", "fxaa-f.sdr", 0, 
-		3, { "tex0", "rt_w", "rt_h"} },
+		3, { "tex0", "rt_w", "rt_h"}, 0, { NULL } },
 
 	{ "post-v.sdr", "fxaapre-f.sdr", 0,
-		1, { "tex"} },
+		1, { "tex"}, 0, { NULL } },
 
 	{ "post-v.sdr", "ls-f.sdr", SDR_POST_FLAG_LIGHTSHAFT,
-		8, { "scene", "cockpit", "sun_pos", "weight", "intensity", "falloff", "density", "cp_intensity" } }
+		8, { "scene", "cockpit", "sun_pos", "weight", "intensity", "falloff", "density", "cp_intensity" }, 0, { NULL } }
 };
 
 static const unsigned int Num_post_shader_files = sizeof(GL_post_shader_files) / sizeof(opengl_shader_file_t);
@@ -155,19 +155,7 @@ static bool opengl_post_pass_bloom()
 	GL_state.Texture.SetTarget(GL_TEXTURE_2D);
 	GL_state.Texture.Enable(Scene_color_texture);
 
-	glBegin(GL_QUADS);
-		glTexCoord2f(0.0f, 0.0f);
-		glVertex2f(-1.0f, -1.0f);
-
-		glTexCoord2f(1.0f, 0.0f);
-		glVertex2f(1.0f, -1.0f);
-
-		glTexCoord2f(1.0f, 1.0f);
-		glVertex2f(1.0f, 1.0f);
-
-		glTexCoord2f(0.0f, 1.0f);
-		glVertex2f(-1.0f, 1.0f);
-	glEnd();
+	opengl_draw_textured_quad(-1.0f, -1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f);
 
 	GL_state.Texture.Disable();
 
@@ -200,19 +188,7 @@ static bool opengl_post_pass_bloom()
 
 		GL_state.Texture.Enable(Post_bloom_texture_id[pass]);
 
-		glBegin(GL_QUADS);
-			glTexCoord2f(0.0f, 0.0f);
-			glVertex2f(-1.0f, -1.0f);
-
-			glTexCoord2f(1.0f, 0.0f);
-			glVertex2f(1.0f, -1.0f);
-
-			glTexCoord2f(1.0f, 1.0f);
-			glVertex2f(1.0f, 1.0f);
-
-			glTexCoord2f(0.0f, 1.0f);
-			glVertex2f(-1.0f, 1.0f);
-		glEnd();
+		opengl_draw_textured_quad(-1.0f, -1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f);
 	}
 
 	GL_state.Texture.Disable();
@@ -271,10 +247,10 @@ void recompile_fxaa_shader() {
 	mprintf(("Recompiling FXAA shader with preset %d\n", Cmdline_fxaa_preset));
 
 	// read vertex shader
-	vert = opengl_post_load_shader(vert_name, shader_file->flags, NULL);
+	vert = opengl_post_load_shader(vert_name, shader_file->flags, 0);
 
 	// read fragment shader
-	frag = opengl_post_load_shader(frag_name, shader_file->flags, NULL);
+	frag = opengl_post_load_shader(frag_name, shader_file->flags, 0);
 
 
 	Verify( vert != NULL );
@@ -323,19 +299,7 @@ void opengl_post_pass_fxaa() {
 	GL_state.Texture.SetTarget(GL_TEXTURE_2D);
 	GL_state.Texture.Enable(Scene_color_texture);
 
-	glBegin(GL_QUADS);
-		glTexCoord2f(0.0f, 0.0f);
-		glVertex2f(-1.0f, -1.0f);
-
-		glTexCoord2f(Scene_texture_u_scale, 0.0f);
-		glVertex2f(1.0f, -1.0f);
-
-		glTexCoord2f(Scene_texture_u_scale, Scene_texture_v_scale);
-		glVertex2f(1.0f, 1.0f);
-
-		glTexCoord2f(0.0f, Scene_texture_v_scale);
-		glVertex2f(-1.0f, 1.0f);
-	glEnd();
+	opengl_draw_textured_quad(-1.0f, -1.0f, 0.0f, 0.0f, 1.0f, 1.0f, Scene_texture_u_scale, Scene_texture_u_scale);
 
 	GL_state.Texture.Disable();
 
@@ -353,19 +317,7 @@ void opengl_post_pass_fxaa() {
 	GL_state.Texture.SetTarget(GL_TEXTURE_2D);
 	GL_state.Texture.Enable(Scene_luminance_texture);
 
-	glBegin(GL_QUADS);
-		glTexCoord2f(0.0f, 0.0f);
-		glVertex2f(-1.0f, -1.0f);
-
-		glTexCoord2f(Scene_texture_u_scale, 0.0f);
-		glVertex2f(1.0f, -1.0f);
-
-		glTexCoord2f(Scene_texture_u_scale, Scene_texture_v_scale);
-		glVertex2f(1.0f, 1.0f);
-
-		glTexCoord2f(0.0f, Scene_texture_v_scale);
-		glVertex2f(-1.0f, 1.0f);
-	glEnd();
+	opengl_draw_textured_quad(-1.0f, -1.0f, 0.0f, 0.0f, 1.0f, 1.0f, Scene_texture_u_scale, Scene_texture_u_scale);
 
 	GL_state.Texture.Disable();
 
@@ -432,19 +384,9 @@ void gr_opengl_post_process_end()
 				glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 				GL_state.Blend(GL_TRUE);
 				GL_state.SetAlphaBlendMode(ALPHA_BLEND_ADDITIVE);
-				glBegin(GL_QUADS);
-					glTexCoord2f(0.0f, 0.0f);
-					glVertex2f(-1.0f, -1.0f);
+				
+				opengl_draw_textured_quad(-1.0f, -1.0f, 0.0f, 0.0f, 1.0f, 1.0f, Scene_texture_u_scale, Scene_texture_u_scale);
 
-					glTexCoord2f(Scene_texture_u_scale, 0.0f);
-					glVertex2f(1.0f, -1.0f);
-
-					glTexCoord2f(Scene_texture_u_scale, Scene_texture_v_scale);
-					glVertex2f(1.0f, 1.0f);
-
-					glTexCoord2f(0.0f, Scene_texture_v_scale);
-					glVertex2f(-1.0f, 1.0f);
-				glEnd();
 				GL_state.Blend(GL_FALSE);
 				break;
 			}
@@ -511,24 +453,10 @@ void gr_opengl_post_process_end()
 	GL_state.Texture.SetTarget(GL_TEXTURE_2D);
 	GL_state.Texture.Enable(Scene_color_texture);
 
-	glBegin(GL_QUADS);
-		glTexCoord2f(0.0f, 0.0f);
-		glVertex2f(-1.0f, -1.0f);
-
-		glTexCoord2f(Scene_texture_u_scale, 0.0f);
-		glVertex2f(1.0f, -1.0f);
-
-		glTexCoord2f(Scene_texture_u_scale, Scene_texture_v_scale);
-		glVertex2f(1.0f, 1.0f);
-
-		glTexCoord2f(0.0f, Scene_texture_v_scale);
-		glVertex2f(-1.0f, 1.0f);
-	glEnd();
-
+	opengl_draw_textured_quad(-1.0f, -1.0f, 0.0f, 0.0f, 1.0f, 1.0f, Scene_texture_u_scale, Scene_texture_u_scale);
 	// Done!
 
-	GL_state.Texture.SetActiveUnit(1);
-	GL_state.Texture.Disable();
+	GL_state.Texture.SetActiveUnit(1);	GL_state.Texture.Disable();
 	GL_state.Texture.SetActiveUnit(0);
 	GL_state.Texture.Disable();
 

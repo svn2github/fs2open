@@ -367,7 +367,6 @@ void HudGaugeTargetBox::renderTargetForeground()
  */
 void HudGaugeTargetBox::renderTargetIntegrity(int disabled,int force_obj_num)
 {
-	object	*objp;
 	int		clip_h,w,h;
 	char		buf[16];
 
@@ -379,12 +378,8 @@ void HudGaugeTargetBox::renderTargetIntegrity(int disabled,int force_obj_num)
 		return;
 	}
 
-	if(force_obj_num == -1){
+	if(force_obj_num == -1)
 		Assert(Player_ai->target_objnum >= 0 );
-		objp = &Objects[Player_ai->target_objnum];
-	} else {
-		objp = &Objects[force_obj_num];
-	}
 
 	clip_h = fl2i( (1 - Pl_target_integrity) * integrity_bar_h );
 
@@ -523,12 +518,15 @@ void HudGaugeTargetBox::renderTargetShip(object *target_objp)
 			opengl_shader_set_animated_effect(Targetbox_shader_effect);
 		}
 
+		if (!Glowpoint_override)
+			Glowpoint_override = true;
 		// maybe render a special hud-target-only model
 		if(target_sip->model_num_hud >= 0){
 			model_render( target_sip->model_num_hud, &target_objp->orient, &obj_pos, flags | MR_LOCK_DETAIL | MR_AUTOCENTER | MR_NO_FOGGING);
 		} else {
 			model_render( target_sip->model_num, &target_objp->orient, &obj_pos, flags | MR_LOCK_DETAIL | MR_AUTOCENTER | MR_NO_FOGGING, -1, -1, target_shipp->ship_replacement_textures);
 		}
+		Glowpoint_override = false;
 		ship_model_stop( target_objp );
 
 		sx = 0;
@@ -581,13 +579,10 @@ void HudGaugeTargetBox::renderTargetDebris(object *target_objp)
 	matrix	camera_orient = IDENTITY_MATRIX;
 	debris	*debrisp;
 	vec3d	orient_vec, up_vector;
-	int		target_team;
 	float		factor;	
 	int flags=0;
 
 	debrisp = &Debris[target_objp->instance];
-
-	target_team = obj_team(target_objp);
 
 	if ( Detail.targetview_model )	{
 		// take the forward orientation to be the vector from the player to the current target
@@ -804,14 +799,11 @@ void HudGaugeTargetBox::renderTargetAsteroid(object *target_objp)
 	matrix		camera_orient = IDENTITY_MATRIX;
 	asteroid		*asteroidp;
 	vec3d		orient_vec, up_vector;
-	int			target_team;
 	float			time_to_impact, factor;	
 	int			pof;
 
 	int flags=0;									//draw flags for wireframe
 	asteroidp = &Asteroids[target_objp->instance];
-
-	target_team = obj_team(target_objp);
 
 	pof = asteroidp->asteroid_subtype;
 	
@@ -1299,7 +1291,6 @@ void get_turret_subsys_name(ship_weapon *swp, char *outstr)
 void HudGaugeTargetBox::renderTargetShipInfo(object *target_objp)
 {
 	ship			*target_shipp;
-	ship_info	*target_sip;
 	int			w, h, screen_integrity = 1;
 	char			outstr[NAME_LENGTH];
 	char			outstr_name[NAME_LENGTH*2+3];
@@ -1309,7 +1300,6 @@ void HudGaugeTargetBox::renderTargetShipInfo(object *target_objp)
 	Assert(target_objp);	// Goober5000
 	Assert(target_objp->type == OBJ_SHIP);
 	target_shipp = &Ships[target_objp->instance];
-	target_sip = &Ship_info[target_shipp->ship_info_index];
 
 	// set up colors
 	if ( HudGauge::maybeFlashSexp() == 1 ) {
