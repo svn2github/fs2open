@@ -1224,6 +1224,7 @@ void ship_select_blit_ship_info()
 
 	// strip out newlines
 	memset(ship_desc,0,1000);
+	memset(Ship_select_ship_info_text,0,1500);
 	strcpy_s(ship_desc, sip->desc);
 	token = strtok(ship_desc,"\n");
 	if(token != NULL){
@@ -2425,10 +2426,11 @@ int create_wings()
 
 	for ( i = 0; i < MAX_WING_BLOCKS; i++ ) {
 		wb = &Ss_wings[i];
-		wp = &Wings[wb->wingnum];		
 
 		if ( wb->wingnum == -1 )
 			continue;
+
+		wp = &Wings[wb->wingnum];
 
 		for ( k = 0; k < MAX_WING_SLOTS; k++ ) {
 			cleanup_ship_index[k] = -1;
