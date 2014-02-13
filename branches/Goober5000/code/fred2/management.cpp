@@ -909,8 +909,9 @@ void clear_mission()
 		Team_data[i].num_weapon_choices = count; 
 	}
 
-	*Mission_text = *Mission_text_raw = EOF_CHAR;
-	Mission_text[1] = Mission_text_raw[1] = 0;
+	// these are SCP_strings now, so this is valid assignment
+	Mission_text = EOF_CHAR;
+	Mission_text_raw = EOF_CHAR;
 
 	waypoint_parse_init();
 	Num_mission_events = 0;

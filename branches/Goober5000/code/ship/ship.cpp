@@ -1034,7 +1034,7 @@ int parse_ship(const char *filename, bool replace)
 #endif
 
 	//Remove @ symbol
-	//these used to be used to denote weapons that would
+	//these used to denote weapons that would
 	//only be parsed in demo builds
 	if ( buf[0] == '@' ) {
 		backspace(buf);

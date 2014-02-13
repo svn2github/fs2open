@@ -72,7 +72,7 @@ void parse_ai_profiles_tbl(const char *filename)
 	int i, rval;
 	char profile_name[NAME_LENGTH];
 	ai_profile_t dummy_profile;
-	char *saved_Mp = NULL;
+	SCP_string::iterator saved_Mp = INVALID_MP;
 	char buf[NAME_LENGTH];
 
 	// open localization
@@ -493,7 +493,7 @@ void parse_ai_profiles_tbl(const char *filename)
 
 
 			// if we've been through once already and are at the same place, force a move
-			if ( saved_Mp && (saved_Mp == Mp) )
+			if ( (saved_Mp != INVALID_MP) && (saved_Mp == Mp) )
 			{
 				char tmp[60];
 				memset(tmp, 0, 60);

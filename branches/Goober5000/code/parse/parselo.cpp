@@ -45,16 +45,21 @@ int		fred_parse_flag = 0;
 int		Token_found_flag;
 jmp_buf	parse_abort;
 
-char 	*Mission_text = NULL;
-char	*Mission_text_raw = NULL;
-char	*Mp = NULL, *Mp_save = NULL;
-char	*token_found;
+SCP_string dummy_string;
+const SCP_string::iterator INVALID_MP = dummy_string.end();
+
+SCP_string Mission_text;
+SCP_string Mission_text_raw;
+SCP_string::iterator Mp = INVALID_MP;
+SCP_string::iterator paused_Mp = INVALID_MP;
+
+const char	*token_found;
 
 static int Parsing_paused = 0;
 
-// text allocation stuff
-void allocate_mission_text(int size);
-static int Mission_text_size = 0;
+// forward declarations
+void read_raw_file_text(const char *filename, int mode = CF_TYPE_ANY, SCP_string &raw_text = Mission_text_raw);
+void process_raw_file_text(SCP_string &processed_text = Mission_text, SCP_string &raw_text = Mission_text_raw);
 
 
 //	Return true if this character is white space, else false.
@@ -94,38 +99,68 @@ void ignore_gray_space()
 //		 "abc \t"   becomes "abc"
 void drop_trailing_white_space(char *str)
 {
-	int	i = strlen(str) - 1;
+	if (*str == 0)
+		return;
 
-	while ((i >= 0) && is_white_space(str[i]))
-		i--;
+	// start at the end of the string
+	char *end = str + strlen(str);
+	char *p = end - 1;
 
-	str[i+1] = 0;
+	while (true)
+	{
+		if (!is_white_space(*p))
+			break;
+		end = p;
+		if (p == str)
+			break;
+		p--;
+	}
+
+	*end = 0;
 }
 
 //	Ditto for SCP_string
 void drop_trailing_white_space(SCP_string &str)
 {
-	int i = str.length() - 1;
+	if (str.length() == 0)
+		return;
 
-	while ((i >= 0) && is_white_space(str[i]))
-		i--;
+	// start at the end of the string
+	SCP_string::iterator end = str.end();
+	SCP_string::iterator p = end - 1;
 
-	str.resize(i+1);
+	while (true)
+	{
+		if (!is_white_space(*p))
+			break;
+		end = p;
+		if (p == str.begin())
+			break;
+		p--;
+	}
+
+	str.erase(end);
 }
 
 //	Eliminate any leading whitespace in str
 void drop_leading_white_space(char *str)
 {
-	int len, first;
+	if (*str == 0)
+		return;
 
-	len = strlen(str);
-	first = 0;
+	int len = strlen(str);
+	int first = 0;
 
 	// find first non-whitespace
 	while ((first < len) && is_white_space(str[first]))
 		first++;
 
-	// quick out
+	// quick outs
+	if (first == len)
+	{
+		*str = 0;
+		return;
+	}
 	if (first == 0)
 		return;
 
@@ -136,38 +171,41 @@ void drop_leading_white_space(char *str)
 //	Ditto for SCP_string
 void drop_leading_white_space(SCP_string &str)
 {
-	int len, first, i;
-
-	len = str.length();
-	first = 0;
-
-	// find first non-whitespace
-	while ((first < len) && is_white_space(str[first]))
-		first++;
-
-	// quick out
-	if (first == 0)
+	if (str.length() == 0)
 		return;
 
-	// copy chars to beginning of string
-	for (i = 0; (first + i) < len; i++)
-		str[i] = str[first + i];
+	SCP_string::iterator p = str.begin();
 
-	// since i is now off the end of the for loop, it represents the new length
-	str.resize(i);
+	// find first non-whitespace
+	while (p != str.end() && is_white_space(*p))
+		p++;
+
+	// quick outs
+	if (p == str.end())
+	{
+		str = "";
+		return;
+	}
+	if (p == str.begin())
+		return;
+
+	// get rid of the character range
+	str.erase(str.begin(), p);
 }
 
 // eliminates all leading and trailing white space from a string.  Returns pointer passed in.
 char *drop_white_space(char *str)
 {
-	int s, e;
+	if (*str == 0)
+		return str;
 
-	s = 0;
+	int s = 0;
 	while (str[s] && is_white_space(str[s]))
 		s++;
 
-	e = strlen(str) - 1;
-	while (e > s) {
+	int e = strlen(str) - 1;
+	while (e > s)
+	{
 		if (!is_white_space(str[e]))
 			break;
 
@@ -184,37 +222,9 @@ char *drop_white_space(char *str)
 // ditto for SCP_string
 void drop_white_space(SCP_string &str)
 {
-	int len, newlen, first, last, i;
-
-	len = str.length();
-	first = 0;
-	last = len - 1;
-
-	// find first non-whitespace
-	while ((first < len) && is_white_space(str[first]))
-		first++;
-
-	// find last non-whitespace
-	while ((last > first) && is_white_space(str[last]))
-		last--;
-
-	newlen = last - first + 1;
-
-	// quick out
-	if (newlen <= 0)
-	{
-		str = "";
-		return;
-	}
-
-	if (first != 0)
-	{
-		// copy chars to beginning of string
-		for (i = 0; i < newlen; i++)
-			str[i] = str[first + i];
-	}
-
-	str.resize(newlen);
+	// since we can't use memmove with SCP_string, there isn't any algorithm more efficient than just trimming both ends
+	drop_trailing_white_space(str);
+	drop_leading_white_space(str);
 }
 
 //	Advances Mp past current token.
@@ -228,7 +238,7 @@ void skip_token()
 
 //	Display a diagnostic message if Verbose is set.
 //	(Verbose is set if -v command line switch is present.)
-void diag_printf(char *format, ...)
+void diag_printf(const char *format, ...)
 {
 #ifndef NDEBUG
 	char	buffer[8192];
@@ -247,10 +257,10 @@ void diag_printf(char *format, ...)
 char *next_tokens()
 {
 	int	count = 0;
-	char	*pstr = Mp;
+	SCP_string::iterator temp_Mp = Mp;
 	char	ch;
 
-	while (((ch = *pstr++) != EOLN) && (ch != EOF_CHAR) && (count < ERROR_LENGTH-1))
+	while (((ch = *temp_Mp++) != EOLN) && (ch != EOF_CHAR) && (count < ERROR_LENGTH-1))
 		Error_str[count++] = ch;
 
 	Error_str[count] = 0;
@@ -265,16 +275,17 @@ int get_line_num()
 	int	count = 1;
 	int	incomment = 0;
 	int	multiline = 0;
-	char	*stoploc;
-	char	*p;
+	SCP_string::iterator stoploc;
+	SCP_string::iterator p;
+	Assert(Mp != INVALID_MP);
 
-	p = Mission_text;
+	p = Mission_text.begin();
 	stoploc = Mp;
 
 	while (p < stoploc)
 	{
 		if (*p == EOF_CHAR)
-			Assert(0);
+			Warning(LOCATION, "Unexpected end-of-file while looking for error line!");
 
 		if ( !incomment && (*p == COMMENT_CHAR) )
 			incomment = 1;
@@ -307,7 +318,7 @@ int get_line_num()
 //	!0 means it's an error message.
 //	Prints line number and other useful information.
 extern int Cmdline_noparseerrors;
-void error_display(int error_level, char *format, ...)
+void error_display(int error_level, const char *format, ...)
 {
 	char type[8];
 	SCP_string error_text;
@@ -334,7 +345,7 @@ void error_display(int error_level, char *format, ...)
 }
 
 //	Advance Mp to the next eoln character.
-void advance_to_eoln(char *more_terminators)
+void advance_to_eoln(const char *more_terminators)
 {
 	char	terminators[128];
 
@@ -345,8 +356,6 @@ void advance_to_eoln(char *more_terminators)
 	terminators[2] = 0;
 	if (more_terminators != NULL)
 		strcat_s(terminators, more_terminators);
-	else
-		terminators[2] = 0;
 
 	while (strchr(terminators, *Mp) == NULL)
 		Mp++;
@@ -355,7 +364,7 @@ void advance_to_eoln(char *more_terminators)
 // Advance Mp to the next white space (ignoring white space inside of " marks)
 void advance_to_next_white()
 {
-	int in_quotes = 0;
+	bool in_quotes = false;
 
 	while ((*Mp != EOLN) && (*Mp != EOF_CHAR)) {
 		if (*Mp == '\"')
@@ -374,27 +383,27 @@ void advance_to_next_white()
 // Search for specified string, skipping everything up to that point.  Returns 1 if found,
 // 0 if string wasn't found (and hit end of file), or -1 if not found, but end of checking
 // block was reached.
-int skip_to_string(char *pstr, char *end)
+int skip_to_string(const char *pstr, const char *end)
 {
-	int len, len2 = 0;
+	size_t len, len2 = 0;
 
 	ignore_white_space();
 	len = strlen(pstr);
 	if (end)
 		len2 = strlen(end);
 
-	while ((*Mp != EOF_CHAR) && strnicmp(pstr, Mp, len)) {
+	while ((*Mp != EOF_CHAR) && SCP_stricmp(pstr, Mission_text, Mp, len)) {
 		if (end && *Mp == '#')
 			return 0;
 
-		if (end && !strnicmp(end, Mp, len2))
+		if (end && !SCP_stricmp(end, Mission_text, Mp, len2))
 			return -1;
 
-		advance_to_eoln(NULL);
+		advance_to_eoln();
 		ignore_white_space();
 	}
 
-	if (!Mp || (*Mp == EOF_CHAR))
+	if (*Mp == EOF_CHAR)
 		return 0;
 
 	Mp += strlen(pstr);
@@ -402,10 +411,10 @@ int skip_to_string(char *pstr, char *end)
 }
 
 // Goober5000
-// Advance to start of pstr.  Return 0 is successful, otherwise return !0
-int skip_to_start_of_string(char *pstr, char *end)
+// Advance to start of pstr.  Return 0 if successful, otherwise return !0
+int skip_to_start_of_string(const char *pstr, const char *end)
 {
-	int len, endlen;
+	size_t len, endlen;
 
 	ignore_white_space();
 	len = strlen(pstr);
@@ -414,27 +423,27 @@ int skip_to_start_of_string(char *pstr, char *end)
 	else
 		endlen = 0;
 
-	while ( (*Mp != EOF_CHAR) && strnicmp(pstr, Mp, len) ) {
+	while ( (*Mp != EOF_CHAR) && SCP_stricmp(pstr, Mission_text, Mp, len) ) {
 		if (end && *Mp == '#')
 			return 0;
 
-		if (end && !strnicmp(end, Mp, endlen))
+		if (end && !SCP_stricmp(end, Mission_text, Mp, endlen))
 			return 0;
 
-		advance_to_eoln(NULL);
+		advance_to_eoln();
 		ignore_white_space();
 	}
 
-	if (!Mp || (*Mp == EOF_CHAR))
+	if (*Mp == EOF_CHAR)
 		return 0;
 
 	return 1;
 }
 
-// Advance to start of either pstr1 or pstr2.  Return 0 is successful, otherwise return !0
-int skip_to_start_of_string_either(char *pstr1, char *pstr2, char *end)
+// Advance to start of either pstr1 or pstr2.  Return 0 if successful, otherwise return !0
+int skip_to_start_of_string_either(const char *pstr1, const char *pstr2, const char *end)
 {
-	int len1, len2, endlen;
+	size_t len1, len2, endlen;
 
 	ignore_white_space();
 	len1 = strlen(pstr1);
@@ -444,18 +453,18 @@ int skip_to_start_of_string_either(char *pstr1, char *pstr2, char *end)
 	else
 		endlen = 0;
 
-	while ( (*Mp != EOF_CHAR) && strnicmp(pstr1, Mp, len1) && strnicmp(pstr2, Mp, len2) ) {
+	while ( (*Mp != EOF_CHAR) && SCP_stricmp(pstr1, Mission_text, Mp, len1) && SCP_stricmp(pstr2, Mission_text, Mp, len2) ) {
 		if (end && *Mp == '#')
 			return 0;
 
-		if (end && !strnicmp(end, Mp, endlen))
+		if (end && !SCP_stricmp(end, Mission_text, Mp, endlen))
 			return 0;
 
-		advance_to_eoln(NULL);
+		advance_to_eoln();
 		ignore_white_space();
 	}
 
-	if (!Mp || (*Mp == EOF_CHAR))
+	if (*Mp == EOF_CHAR)
 		return 0;
 
 	return 1;
@@ -467,15 +476,15 @@ int skip_to_start_of_string_either(char *pstr1, char *pstr2, char *end)
 // lines.
 //	If unable to find the required string after RS_MAX_TRIES tries, then
 //	abort using longjmp to parse_abort.
-int required_string(char *pstr)
+int required_string(const char *pstr)
 {
 	int	count = 0;
 
 	ignore_white_space();
 
-	while (strnicmp(pstr, Mp, strlen(pstr)) && (count < RS_MAX_TRIES)) {
+	while (SCP_stricmp(pstr, Mission_text, Mp, strlen(pstr)) && (count < RS_MAX_TRIES)) {
 		error_display(1, "Missing required token: [%s]. Found [%.32s] instead.\n", pstr, next_tokens());
-		advance_to_eoln(NULL);
+		advance_to_eoln();
 		ignore_white_space();
 		count++;
 	}
@@ -520,19 +529,13 @@ int check_for_string(const char *pstr)
 {
 	ignore_white_space();
 
-	if (!strnicmp(pstr, Mp, strlen(pstr)))
-		return 1;
-
-	return 0;
+	return SCP_stricmp(pstr, Mission_text, Mp, strlen(pstr)) == 0;
 }
 
 // like check for string, but doesn't skip past any whitespace
 int check_for_string_raw(const char *pstr)
 {
-	if (!strnicmp(pstr, Mp, strlen(pstr)))
-		return 1;
-
-	return 0;
+	return SCP_stricmp(pstr, Mission_text, Mp, strlen(pstr)) == 0;
 }
 
 // Find an optional string.
@@ -541,26 +544,23 @@ int check_for_string_raw(const char *pstr)
 int optional_string(const char *pstr)
 {
 	ignore_white_space();
-//	mprintf(("lookint for optional string %s",pstr));
 
-	if (!strnicmp(pstr, Mp, strlen(pstr))) {
+	if (!SCP_stricmp(pstr, Mission_text, Mp, strlen(pstr))) {
 		Mp += strlen(pstr);
-//		mprintf((", found it\n"));
 		return 1;
 	}
-//	mprintf((", didin't find it it\n"));
 
 	return 0;
 }
 
-int optional_string_either(char *str1, char *str2)
+int optional_string_either(const char *str1, const char *str2)
 {
 	ignore_white_space();
 
-	if ( !strnicmp(str1, Mp, strlen(str1)) ) {
+	if ( !SCP_stricmp(str1, Mission_text, Mp, strlen(str1)) ) {
 		Mp += strlen(str1);
 		return 0;
-	} else if ( !strnicmp(str2, Mp, strlen(str2)) ) {
+	} else if ( !SCP_stricmp(str2, Mission_text, Mp, strlen(str2)) ) {
 		Mp += strlen(str2);
 		return 1;
 	}
@@ -568,26 +568,26 @@ int optional_string_either(char *str1, char *str2)
 	return -1;
 }
 
-int required_string_fred(char *pstr, char *end)
+int required_string_fred(const char *pstr, const char *end)
 {
-	char *backup = Mp;
+	SCP_string::iterator backup = Mp;
 
 	token_found = pstr;
 	if (fred_parse_flag)
 		return 0;
 
 	ignore_white_space();
-	while (*Mp != EOF_CHAR && strnicmp(pstr, Mp, strlen(pstr))) {
-		if ((*Mp == '#') || (end && !strnicmp(end, Mp, strlen(end)))) {
-			Mp = NULL;
+	while (*Mp != EOF_CHAR && SCP_stricmp(pstr, Mission_text, Mp, strlen(pstr))) {
+		if ((*Mp == '#') || (end && !SCP_stricmp(end, Mission_text, Mp, strlen(end)))) {
+			Mp = INVALID_MP;
 			break;
 		}
 
-		advance_to_eoln(NULL);
+		advance_to_eoln();
 		ignore_white_space();
 	}
 
-	if (!Mp || (*Mp == EOF_CHAR)) {
+	if ((Mp == INVALID_MP) || (*Mp == EOF_CHAR)) {
 		diag_printf("Required string [%s] not found\n", pstr);
 		Mp = backup;
 		Token_found_flag = 0;
@@ -605,27 +605,27 @@ int required_string_fred(char *pstr, char *end)
 // further complicate things, we should only search to a certain point, since we don't want
 // a token that belongs to another section which might match the token we want.  Thus, we
 // also pass in an ending token, which marks the point we should stop looking at.
-int optional_string_fred(char *pstr, char *end, char *end2)
+int optional_string_fred(const char *pstr, const char *end, const char *end2)
 {
-	char *mp_save = Mp;
+	SCP_string::iterator mp_save = Mp;
 
 	token_found = pstr;
 	if (fred_parse_flag)
 		return 0;
 
 	ignore_white_space();
-	while ((*Mp != EOF_CHAR) && strnicmp(pstr, Mp, strlen(pstr))) {
-		if ((*Mp == '#') || (end && !strnicmp(end, Mp, strlen(end))) ||
-			(end2 && !strnicmp(end2, Mp, strlen(end2)))) {
-			Mp = NULL;
+	while ((*Mp != EOF_CHAR) && SCP_stricmp(pstr, Mission_text, Mp, strlen(pstr))) {
+		if ((*Mp == '#') || (end && !SCP_stricmp(end, Mission_text, Mp, strlen(end))) ||
+			(end2 && !SCP_stricmp(end2, Mission_text, Mp, strlen(end2)))) {
+			Mp = INVALID_MP;
 			break;
 		}
 
-		advance_to_eoln(NULL);
+		advance_to_eoln();
 		ignore_white_space();
 	}
 
-	if (!Mp || (*Mp == EOF_CHAR)) {
+	if ((Mp == INVALID_MP) || (*Mp == EOF_CHAR)) {
 		diag_printf("Optional string [%s] not found\n", pstr);
 		Mp = mp_save;
 		Token_found_flag = 0;
@@ -641,18 +641,18 @@ int optional_string_fred(char *pstr, char *end, char *end2)
 //	Return 0 or 1 for str1 match, str2 match.  Return -1 if neither matches.
 //	Does not update Mp if token found.  If not found, advances, trying to
 //	find the string.  Doesn't advance past the found string.
-int required_string_either(char *str1, char *str2)
+int required_string_either(const char *str1, const char *str2)
 {
 	int	count = 0;
 
 	ignore_white_space();
 
 	while (count < RS_MAX_TRIES) {
-		if (strnicmp(str1, Mp, strlen(str1)) == 0) {
+		if (SCP_stricmp(str1, Mission_text, Mp, strlen(str1)) == 0) {
 			// Mp += strlen(str1);
 			diag_printf("Found required string [%s]\n", token_found = str1);
 			return 0;
-		} else if (strnicmp(str2, Mp, strlen(str2)) == 0) {
+		} else if (SCP_stricmp(str2, Mission_text, Mp, strlen(str2)) == 0) {
 			// Mp += strlen(str2);
 			diag_printf("Found required string [%s]\n", token_found = str2);
 			return 1;
@@ -660,7 +660,7 @@ int required_string_either(char *str1, char *str2)
 
 		error_display(1, "Required token = [%s] or [%s], found [%.32s].\n", str1, str2, next_tokens());
 
-		advance_to_eoln(NULL);
+		advance_to_eoln();
 		ignore_white_space();
 		count++;
 	}
@@ -677,29 +677,29 @@ int required_string_either(char *str1, char *str2)
 //	Return 0 or 1 for str1 match, str2 match.  Return -1 if neither matches.
 //	Does not update Mp if token found.  If not found, advances, trying to
 //	find the string.  Doesn't advance past the found string.
-int required_string_3(char *str1, char *str2, char *str3)
+int required_string_3(const char *str1, const char *str2, const char *str3)
 {
 	int	count = 0;
 
 	ignore_white_space();
 
 	while (count < RS_MAX_TRIES) {
-		if (strnicmp(str1, Mp, strlen(str1)) == 0) {
+		if (SCP_stricmp(str1, Mission_text, Mp, strlen(str1)) == 0) {
 			// Mp += strlen(str1);
 			diag_printf("Found required string [%s]\n", token_found = str1);
 			return 0;
-		} else if (strnicmp(str2, Mp, strlen(str2)) == 0) {
+		} else if (SCP_stricmp(str2, Mission_text, Mp, strlen(str2)) == 0) {
 			// Mp += strlen(str2);
 			diag_printf("Found required string [%s]\n", token_found = str2);
 			return 1;
-		} else if (strnicmp(str3, Mp, strlen(str3)) == 0) {
+		} else if (SCP_stricmp(str3, Mission_text, Mp, strlen(str3)) == 0) {
 			diag_printf("Found required string [%s]\n", token_found = str3);
 			return 2;
 		}
 
 		error_display(1, "Required token = [%s], [%s] or [%s], found [%.32s].\n", str1, str2, str3, next_tokens());
 
-		advance_to_eoln(NULL);
+		advance_to_eoln();
 		ignore_white_space();
 		count++;
 	}
@@ -707,32 +707,32 @@ int required_string_3(char *str1, char *str2, char *str3)
 	return -1;
 }
 
-int required_string_4(char *str1, char *str2, char *str3, char *str4)
+int required_string_4(const char *str1, const char *str2, const char *str3, const char *str4)
 {
 	int	count = 0;
 	
 	ignore_white_space();
 	
 	while (count < RS_MAX_TRIES) {
-		if (strnicmp(str1, Mp, strlen(str1)) == 0) {
+		if (SCP_stricmp(str1, Mission_text, Mp, strlen(str1)) == 0) {
 			// Mp += strlen(str1);
 			diag_printf("Found required string [%s]\n", token_found = str1);
 			return 0;
-		} else if (strnicmp(str2, Mp, strlen(str2)) == 0) {
+		} else if (SCP_stricmp(str2, Mission_text, Mp, strlen(str2)) == 0) {
 			// Mp += strlen(str2);
 			diag_printf("Found required string [%s]\n", token_found = str2);
 			return 1;
-		} else if (strnicmp(str3, Mp, strlen(str3)) == 0) {
+		} else if (SCP_stricmp(str3, Mission_text, Mp, strlen(str3)) == 0) {
 			diag_printf("Found required string [%s]\n", token_found = str3);
 			return 2;
-		} else if (strnicmp(str4, Mp, strlen(str4)) == 0) {
+		} else if (SCP_stricmp(str4, Mission_text, Mp, strlen(str4)) == 0) {
 			diag_printf("Found required string [%s]\n", token_found = str4);
 			return 3;
 		}
 		
 		error_display(1, "Required token = [%s], [%s], [%s], or [%s], found [%.32s].\n", str1, str2, str3, str4, next_tokens());
 		
-		advance_to_eoln(NULL);
+		advance_to_eoln();
 		ignore_white_space();
 		count++;
 	}
@@ -740,23 +740,23 @@ int required_string_4(char *str1, char *str2, char *str3, char *str4)
 	return -1;
 }
 
-int required_string_either_fred(char *str1, char *str2)
+int required_string_either_fred(const char *str1, const char *str2)
 {
 	ignore_white_space();
 
 	while (*Mp != EOF_CHAR) {
-		if (!strnicmp(str1, Mp, strlen(str1))) {
+		if (!SCP_stricmp(str1, Mission_text, Mp, strlen(str1))) {
 			// Mp += strlen(str1);
 			diag_printf("Found required string [%s]\n", token_found = str1);
 			return fred_parse_flag = 0;
 		
-		} else if (!strnicmp(str2, Mp, strlen(str2))) {
+		} else if (!SCP_stricmp(str2, Mission_text, Mp, strlen(str2))) {
 			// Mp += strlen(str2);
 			diag_printf("Found required string [%s]\n", token_found = str2);
 			return fred_parse_flag = 1;
 		}
 
-		advance_to_eoln(NULL);
+		advance_to_eoln();
 		ignore_white_space();
 	}
 
@@ -766,40 +766,47 @@ int required_string_either_fred(char *str1, char *str2)
 	return -1;
 }
 
-//	Copy characters from instr to outstr until eoln is found, or until max
-//	characters have been copied (including terminator).
-void copy_to_eoln(char *outstr, char *more_terminators, char *instr, int max)
+//	Copy characters from Mp to outstr until eoln is found, or until max
+//	characters have been copied (including null terminator).
+//	This function leaves Mp at its original position.
+void copy_to_eoln(char *outstr, const char *more_terminators, size_t buf_size)
 {
-	int	count = 0;
+	size_t	count = 0;
 	char	ch;
 	char	terminators[128];
+	SCP_string::iterator temp_Mp = Mp;
 
 	Assert((more_terminators == NULL) || (strlen(more_terminators) < 125));
+	Assert(buf_size > 0);
 
 	terminators[0] = EOLN;
 	terminators[1] = (char)EOF_CHAR;
 	terminators[2] = 0;
 	if (more_terminators != NULL)
 		strcat_s(terminators, more_terminators);
-	else
-		terminators[2] = 0;
 
-	while (((ch = *instr++) != 0) && (strchr(terminators, ch) == NULL)  && (count < max)) {
+	while (((ch = *temp_Mp++) != 0) && (strchr(terminators, ch) == NULL) && (count < buf_size))
+	{
 		*outstr++ = ch;
 		count++;
 	}
 
-	if (count >= max)
-		error_display(0, "Token too long: [%s].  Length = %i.  Max is %i.\n", next_tokens(), strlen(next_tokens()), max);
+	if (count >= buf_size)
+	{
+		error_display(0, "Token too long: [%s].  Length = %i.  Max is %i.\n", next_tokens(), strlen(next_tokens()), buf_size);
+		if (count > 0)
+			outstr--;
+	}
 
 	*outstr = 0;
 }
 
 //	Ditto for SCP_string.
-void copy_to_eoln(SCP_string &outstr, char *more_terminators, char *instr)
+void copy_to_eoln(SCP_string &outstr, const char *more_terminators)
 {
 	char	ch;
 	char	terminators[128];
+	SCP_string::iterator temp_Mp = Mp;
 
 	Assert((more_terminators == NULL) || (strlen(more_terminators) < 125));
 
@@ -808,25 +815,28 @@ void copy_to_eoln(SCP_string &outstr, char *more_terminators, char *instr)
 	terminators[2] = 0;
 	if (more_terminators != NULL)
 		strcat_s(terminators, more_terminators);
-	else
-		terminators[2] = 0;
 
 	outstr = "";
-	while (((ch = *instr++) != 0) && (strchr(terminators, ch) == NULL)) {
+	while (((ch = *temp_Mp++) != 0) && (strchr(terminators, ch) == NULL))
 		outstr.append(1, ch);
-	}
 }
 
-//	Copy characters from instr to outstr until next white space is found, or until max
-//	characters have been copied (including terminator).
-void copy_to_next_white(char *outstr, char *instr, int max)
+//	Copy characters from Mp to outstr until next white space is found, or until max
+//	characters have been copied (including null terminator).
+//	This function leaves Mp at its original position.
+void copy_to_next_white(char *outstr, size_t buf_size)
 {
-	int	count = 0;
-	int	in_quotes = 0;
+	size_t	count = 0;
+	bool	in_quotes = false;
 	char	ch;
+	SCP_string::iterator temp_Mp = Mp;
 
-	while (((ch = *instr++)>0) && (ch != EOLN) && (ch != EOF_CHAR) && (count < max)) {
-		if ( ch == '\"' ) {
+	Assert(buf_size > 0);
+
+	while (((ch = *temp_Mp++) != 0) && (ch != EOLN) && (ch != EOF_CHAR) && (count < buf_size))
+	{
+		if ( ch == '\"' )
+		{
 			in_quotes = !in_quotes;
 			continue;
 		}
@@ -841,21 +851,28 @@ void copy_to_next_white(char *outstr, char *instr, int max)
 		count++;
 	}
 
-	if (count >= max)
-		error_display(0, "Token too long: [%s].  Length = %i.  Max is %i.\n", next_tokens(), strlen(next_tokens()), max);
+	if (count >= buf_size)
+	{
+		error_display(0, "Token too long: [%s].  Length = %i.  Max is %i.\n", next_tokens(), strlen(next_tokens()), buf_size);
+		if (count > 0)
+			outstr--;
+	}
 
 	*outstr = 0;
 }
 
 //	Ditto for SCP_string.
-void copy_to_next_white(SCP_string &outstr, char *instr)
+void copy_to_next_white(SCP_string &outstr)
 {
-	int	in_quotes = 0;
+	bool	in_quotes = false;
 	char	ch;
+	SCP_string::iterator temp_Mp = Mp;
 
 	outstr = "";
-	while (((ch = *instr++)>0) && (ch != EOLN) && (ch != EOF_CHAR)) {
-		if ( ch == '\"' ) {
+	while (((ch = *temp_Mp++) != 0) && (ch != EOLN) && (ch != EOF_CHAR))
+	{
+		if ( ch == '\"' )
+		{
 			in_quotes = !in_quotes;
 			continue;
 		}
@@ -867,58 +884,37 @@ void copy_to_next_white(SCP_string &outstr, char *instr)
 			break;
 
 		outstr.append(1, ch);
-	}
-}
-
-//Returns a null-terminated character string allocated with vm_malloc() with the data
-char* alloc_text_until(char* instr, char* endstr)
-{
-	Assert(instr && endstr);
-	char *foundstr = stristr(instr, endstr);
-	if(foundstr == NULL)
-	{
-		Error(LOCATION, "Missing [%s] in file");
-		longjmp(parse_abort, 3);
-	}
-	else
-	{
-		char* rstr = NULL;
-		rstr = (char*) vm_malloc((foundstr - instr)*sizeof(char));
-
-		if(rstr != NULL) {
-			strncpy(rstr, instr, foundstr-instr);
-			rstr[foundstr-instr] = '\0';
-		} else {
-			Error(LOCATION, "Could not allocate enough memory in alloc_text_until");
-		}
-
-		return rstr;
 	}
 }
 
 //	Copy text until a certain string is matched.
 //	For example, this is used to copy mission notes, scanning until $END NOTES:
-// is found.
-void copy_text_until(char *outstr, char *instr, char *endstr, int max_chars)
+//	is found.
+//	This function leaves Mp at its original position.
+void copy_text_until(char *outstr, const char *endstr, size_t buf_size)
 {
-	char *foundstr;
-	Assert(outstr && instr && endstr);
+	size_t startpos, foundpos;
+	Assert(outstr && endstr);
+	Assert(buf_size > 0);
 
-	foundstr = stristr(instr, endstr);
+	startpos = Mp - Mission_text.begin();
+	foundpos = stristr(Mission_text, endstr, startpos);
 
-	if (foundstr == NULL) {
+	if (foundpos == SCP_string::npos)
+	{
 		nprintf(("Error", "Error.  Looking for [%s], but never found it.\n", endstr));
 		longjmp(parse_abort, 3);
 	}
 
-	if (foundstr - instr + strlen(endstr) < (uint) max_chars) {
-		strncpy(outstr, instr, foundstr - instr);
-		outstr[foundstr - instr] = 0;
-
-	} else {
+	if (foundpos - startpos < buf_size - 1)
+	{
+		size_t len = Mission_text.copy(outstr, foundpos - startpos, startpos);
+		outstr[len] = 0;
+	}
+	else
+	{
 		nprintf(("Error", "Error.  Too much text (%i chars, %i allowed) before %s\n",
-			foundstr - instr - strlen(endstr), max_chars, endstr));
-
+			foundpos - startpos, buf_size - 1, endstr));
 		longjmp(parse_abort, 4);
 	}
 
@@ -926,32 +922,33 @@ void copy_text_until(char *outstr, char *instr, char *endstr, int max_chars)
 }
 
 //	Ditto for SCP_string.
-void copy_text_until(SCP_string &outstr, char *instr, char *endstr)
+void copy_text_until(SCP_string &outstr, const char *endstr)
 {
-	char *foundstr;
-	Assert(instr && endstr);
+	size_t startpos, foundpos;
+	Assert(endstr);
 
-	foundstr = stristr(instr, endstr);
+	startpos = Mp - Mission_text.begin();
+	foundpos = stristr(Mission_text, endstr, startpos);
 
-	if (foundstr == NULL) {
+	if (foundpos == SCP_string::npos) {
 		nprintf(("Error", "Error.  Looking for [%s], but never found it.\n", endstr));
 		longjmp(parse_abort, 3);
 	}
 
-	outstr.assign(instr, foundstr - instr);
+	outstr.assign(Mission_text, foundpos, foundpos - startpos);
 
 	diag_printf("Here's the partial wad of text:\n%.30s\n", outstr.c_str());
 }
 
 // stuffs a string into a buffer.  Can get a string between " marks and stops
-// when whitespace is encounted -- not to end of line
-void stuff_string_white(char *outstr, int len)
+// when whitespace is encountered -- not to end of line
+void stuff_string_white(char *outstr, size_t buf_size)
 {
-	if(!len)
-		len = NAME_LENGTH-1;
+	if (!buf_size)
+		buf_size = NAME_LENGTH;
 
 	ignore_white_space();
-	copy_to_next_white(outstr, Mp, len);
+	copy_to_next_white(outstr, buf_size);
 	advance_to_next_white();
 }
 
@@ -959,27 +956,27 @@ void stuff_string_white(char *outstr, int len)
 void stuff_string_white(SCP_string &outstr)
 {
 	ignore_white_space();
-	copy_to_next_white(outstr, Mp);
+	copy_to_next_white(outstr);
 	advance_to_next_white();
 }
 
 // Goober5000
-void stuff_string_until(char *outstr, char *endstr, int len)
+void stuff_string_until(char *outstr, const char *endstr, size_t buf_size)
 {
-	if(!len)
-		len = NAME_LENGTH-1;
+	if (!buf_size)
+		buf_size = NAME_LENGTH;
 
 	ignore_gray_space();
-	copy_text_until(outstr, Mp, endstr, len);
+	copy_text_until(outstr, endstr, buf_size);
 	Mp += strlen(outstr);
 	drop_trailing_white_space(outstr);
 }
 
 // Goober5000
-void stuff_string_until(SCP_string &outstr, char *endstr)
+void stuff_string_until(SCP_string &outstr, const char *endstr)
 {
 	ignore_gray_space();
-	copy_text_until(outstr, Mp, endstr);
+	copy_text_until(outstr, endstr);
 	Mp += outstr.length();
 	drop_trailing_white_space(outstr);
 }
@@ -990,32 +987,32 @@ void stuff_string_until(SCP_string &outstr, char *endstr)
 //or NULL on failure
 //Does depth checks for the start and end strings
 //extra_chars indicates extra malloc space that should be allocated.
-char* alloc_block(char* startstr, char* endstr, int extra_chars)
+char* alloc_block(const char* startstr, const char* endstr, size_t extra_chars)
 {
 	Assert(startstr != NULL && endstr != NULL);
 	Assert(stricmp(startstr, endstr));
 
 	char* rval = NULL;
-	uint elen = strlen(endstr);
-	uint slen = strlen(startstr);
-	uint flen = 0;
+	size_t elen = strlen(endstr);
+	size_t slen = strlen(startstr);
+	size_t flen = 0;
 
 	//Skip the opening thing and any extra stuff
 	required_string(startstr);
 	ignore_white_space();
 
 	//Allocate it
-	char* pos = Mp;
+	SCP_string::iterator pos = Mp;
 
 	//Depth checking
 	int level = 1;
 	while(*pos != EOF_CHAR)
 	{
-		if(!strnicmp(pos, startstr, slen))
+		if(!SCP_stricmp(Mission_text, pos, slen, startstr))
 		{
 			level++;
 		}
-		else if(!strnicmp(pos, endstr, elen))
+		else if(!SCP_stricmp(Mission_text, pos, elen, endstr))
 		{
 			level--;
 		}
@@ -1045,7 +1042,7 @@ char* alloc_block(char* startstr, char* endstr, int extra_chars)
 
 		//Copy the text (if memory was allocated)
 		if(rval != NULL) {
-			strncpy(rval, Mp, flen);
+			Mission_text.copy(rval, flen, (Mp - Mission_text.begin()));
 			rval[flen] = '\0';
 		} else {
 			return NULL;
@@ -1134,10 +1131,17 @@ int get_string_or_variable (SCP_string &str)
  */
 int get_string(char *str)
 {
-	int	len;
+	size_t startpos = Mp - Mission_text.begin();
+	size_t foundpos = Mission_text.find("\"", startpos + 1);
 
-	len = strcspn(Mp + 1, "\"");
-	strncpy(str, Mp + 1, len);
+	if (foundpos == SCP_string::npos)
+	{
+		Warning(LOCATION, "Could not find closing quote!");
+		*str = 0;
+		return 0;
+	}
+
+	size_t len = Mission_text.copy(str, foundpos - startpos - 2, startpos + 1);
 	str[len] = 0;
 
 	Mp += len + 2;
@@ -1149,86 +1153,91 @@ int get_string(char *str)
  */
 void get_string(SCP_string &str)
 {
-	int len;
+	size_t startpos = Mp - Mission_text.begin();
+	size_t foundpos = Mission_text.find("\"", startpos + 1);
 
-	len = strcspn(Mp + 1, "\"");
-	str.assign(Mp + 1, len);
+	if (foundpos == SCP_string::npos)
+	{
+		Warning(LOCATION, "Could not find closing quote!");
+		str = "";
+		return;
+	}
 
-	Mp += len + 2;
+	str.assign(Mission_text, startpos + 1, foundpos - startpos - 2);
+
+	Mp += str.length() + 2;
 }
 
 //	Stuff a string into a string buffer.
-//	Supports various FreeSpace primitive types.  If 'len' is supplied, it will override
-// the default string length if using the F_NAME case.
-void stuff_string(char *outstr, int type, int len, char *terminators)
+//	Supports various FreeSpace primitive types.  If 'buf_size' is supplied, it will override
+//	the default string length if using the F_NAME case.
+void stuff_string(char *outstr, int type, size_t buf_size, const char *terminators)
 {
+	// make sure we have enough room
+	Assert( buf_size > 1 );
+
 	char read_str[PARSE_BUF_SIZE] = "";
-	int read_len = PARSE_BUF_SIZE;
-	int final_len = len - 1;
 	int tag_id;
 
-	// make sure we have enough room
-	Assert( final_len > 0 );
-
 	// make sure it's zero'd out
-	memset( outstr, 0, len );
+	memset( outstr, 0, buf_size );
 
 	switch (type) {
 		case F_RAW:
 			ignore_gray_space();
-			copy_to_eoln(read_str, terminators, Mp, read_len);
+			copy_to_eoln(read_str, terminators, PARSE_BUF_SIZE);
 			drop_trailing_white_space(read_str);
 			advance_to_eoln(terminators);
 			break;
 
 		case F_LNAME:
 			ignore_gray_space();
-			copy_to_eoln(read_str, terminators, Mp, read_len);
+			copy_to_eoln(read_str, terminators, PARSE_BUF_SIZE);
 			drop_trailing_white_space(read_str);
 			advance_to_eoln(terminators);
 			break;
 
 		case F_NAME:
 			ignore_gray_space();
-			copy_to_eoln(read_str, terminators, Mp, read_len);
+			copy_to_eoln(read_str, terminators, PARSE_BUF_SIZE);
 			drop_trailing_white_space(read_str);
 			advance_to_eoln(terminators);
 			break;
 
 		case F_DATE:
 			ignore_gray_space();
-			copy_to_eoln(read_str, terminators, Mp, read_len);
+			copy_to_eoln(read_str, terminators, PARSE_BUF_SIZE);
 			drop_trailing_white_space(read_str);
 			advance_to_eoln(terminators);
 			break;
 
 		case F_NOTES:
 			ignore_white_space();
-			copy_text_until(read_str, Mp, "$End Notes:", read_len);
+			copy_text_until(read_str, "$End Notes:", PARSE_BUF_SIZE);
 			Mp += strlen(read_str);
 			required_string("$End Notes:");
 			break;
 
 		case F_FILESPEC:
 			ignore_gray_space();
-			copy_to_eoln(read_str, terminators, Mp, read_len);
+			copy_to_eoln(read_str, terminators, PARSE_BUF_SIZE);
 			drop_trailing_white_space(read_str);
 			advance_to_eoln(terminators);
 			break;
 
-		// F_MULTITEXTOLD keeping for backwards compatability with old missions
+		// F_MULTITEXTOLD keeping for backwards compatibility with old missions
 		// can be deleted once all missions are using new briefing format
 
-		case F_MULTITEXTOLD:		
+		case F_MULTITEXTOLD:
 			ignore_white_space();
-			copy_text_until(read_str, Mp, "$End Briefing Text:", read_len);
+			copy_text_until(read_str, "$End Briefing Text:", PARSE_BUF_SIZE);
 			Mp += strlen(read_str);
 			required_string("$End Briefing Text:");
 			break;
 
-		case F_MULTITEXT:		
+		case F_MULTITEXT:
 			ignore_white_space();
-			copy_text_until(read_str, Mp, "$end_multi_text", read_len);
+			copy_text_until(read_str, "$end_multi_text", PARSE_BUF_SIZE);
 			Mp += strlen(read_str);
 			drop_trailing_white_space(read_str);
 			required_string("$end_multi_text");
@@ -1236,17 +1245,17 @@ void stuff_string(char *outstr, int type, int len, char *terminators)
 
 		case F_PATHNAME:
 			ignore_gray_space();
-			copy_to_eoln(read_str, terminators, Mp, read_len);
+			copy_to_eoln(read_str, terminators, PARSE_BUF_SIZE);
 			drop_trailing_white_space(read_str);
 			advance_to_eoln(terminators);
 			break;
 
 		case F_MESSAGE:
 			ignore_gray_space();
-			copy_to_eoln(read_str, terminators, Mp, read_len);
+			copy_to_eoln(read_str, terminators, PARSE_BUF_SIZE);
 			drop_trailing_white_space(read_str);
 			advance_to_eoln(terminators);
-			break;		
+			break;
 
 		default:
 			Error(LOCATION, "Unhandled string type %d in stuff_string!", type);
@@ -1255,7 +1264,7 @@ void stuff_string(char *outstr, int type, int len, char *terminators)
 	// now we want to do any final localization
 	if(type != F_RAW && type != F_LNAME)
 	{
-		lcl_ext_localize(read_str, outstr, final_len, &tag_id);
+		lcl_ext_localize(read_str, outstr, buf_size - 1, &tag_id);
 
 		// if the hash localized text hash table is active and we have a valid external string - hash it
 		if(fhash_active() && (tag_id > -2)){
@@ -1264,10 +1273,10 @@ void stuff_string(char *outstr, int type, int len, char *terminators)
 	}
 	else
 	{
-		if ( strlen(read_str) > (uint)final_len )
-			error_display(0, "Token too long: [%s].  Length = %i.  Max is %i.\n", read_str, strlen(read_str), final_len);
+		if ( strlen(read_str) > buf_size - 1 )
+			error_display(0, "Token too long: [%s].  Length = %i.  Max is %i.\n", read_str, strlen(read_str), buf_size - 1);
 
-		strncpy(outstr, read_str, final_len);
+		strncpy(outstr, read_str, buf_size - 1);
 	}
 
 	diag_printf("Stuffed string = [%.30s]\n", outstr);
@@ -1275,7 +1284,7 @@ void stuff_string(char *outstr, int type, int len, char *terminators)
 
 //	Stuff a string into a string buffer.
 //	Supports various FreeSpace primitive types.
-void stuff_string(SCP_string &outstr, int type, char *terminators)
+void stuff_string(SCP_string &outstr, int type, const char *terminators)
 {
 	SCP_string read_str;
 	int tag_id;
@@ -1286,42 +1295,42 @@ void stuff_string(SCP_string &outstr, int type, char *terminators)
 	switch (type) {
 		case F_RAW:
 			ignore_gray_space();
-			copy_to_eoln(read_str, terminators, Mp);
+			copy_to_eoln(read_str, terminators);
 			drop_trailing_white_space(read_str);
 			advance_to_eoln(terminators);
 			break;
 
 		case F_LNAME:
 			ignore_gray_space();
-			copy_to_eoln(read_str, terminators, Mp);
+			copy_to_eoln(read_str, terminators);
 			drop_trailing_white_space(read_str);
 			advance_to_eoln(terminators);
 			break;
 
 		case F_NAME:
 			ignore_gray_space();
-			copy_to_eoln(read_str, terminators, Mp);
+			copy_to_eoln(read_str, terminators);
 			drop_trailing_white_space(read_str);
 			advance_to_eoln(terminators);
 			break;
 
 		case F_DATE:
 			ignore_gray_space();
-			copy_to_eoln(read_str, terminators, Mp);
+			copy_to_eoln(read_str, terminators);
 			drop_trailing_white_space(read_str);
 			advance_to_eoln(terminators);
 			break;
 
 		case F_NOTES:
 			ignore_white_space();
-			copy_text_until(read_str, Mp, "$End Notes:");
+			copy_text_until(read_str, "$End Notes:");
 			Mp += read_str.length();
 			required_string("$End Notes:");
 			break;
 
 		case F_FILESPEC:
 			ignore_gray_space();
-			copy_to_eoln(read_str, terminators, Mp);
+			copy_to_eoln(read_str, terminators);
 			drop_trailing_white_space(read_str);
 			advance_to_eoln(terminators);
 			break;
@@ -1329,16 +1338,16 @@ void stuff_string(SCP_string &outstr, int type, char *terminators)
 		// F_MULTITEXTOLD keeping for backwards compatability with old missions
 		// can be deleted once all missions are using new briefing format
 
-		case F_MULTITEXTOLD:		
+		case F_MULTITEXTOLD:
 			ignore_white_space();
-			copy_text_until(read_str, Mp, "$End Briefing Text:");
+			copy_text_until(read_str, "$End Briefing Text:");
 			Mp += read_str.length();
 			required_string("$End Briefing Text:");
 			break;
 
-		case F_MULTITEXT:		
+		case F_MULTITEXT:
 			ignore_white_space();
-			copy_text_until(read_str, Mp, "$end_multi_text");
+			copy_text_until(read_str, "$end_multi_text");
 			Mp += read_str.length();
 			drop_trailing_white_space(read_str);
 			required_string("$end_multi_text");
@@ -1346,17 +1355,17 @@ void stuff_string(SCP_string &outstr, int type, char *terminators)
 
 		case F_PATHNAME:
 			ignore_gray_space();
-			copy_to_eoln(read_str, terminators, Mp);
+			copy_to_eoln(read_str, terminators);
 			drop_trailing_white_space(read_str);
 			advance_to_eoln(terminators);
 			break;
 
 		case F_MESSAGE:
 			ignore_gray_space();
-			copy_to_eoln(read_str, terminators, Mp);
+			copy_to_eoln(read_str, terminators);
 			drop_trailing_white_space(read_str);
 			advance_to_eoln(terminators);
-			break;		
+			break;
 
 		default:
 			Error(LOCATION, "Unhandled string type %d in stuff_string!", type);
@@ -1381,23 +1390,21 @@ void stuff_string(SCP_string &outstr, int type, char *terminators)
 }
 
 // stuff a string, but only until the end of a line. don't ignore leading whitespace. close analog of fgets()/cfgets()
-void stuff_string_line(char *outstr, int len)
+void stuff_string_line(char *outstr, size_t buf_size)
 {
 	char read_str[PARSE_BUF_SIZE] = "";
-	int read_len = PARSE_BUF_SIZE;
-	int final_len = len - 1;
 	int tag_id;
 
-	Assert( final_len > 0 );
+	Assert( buf_size > 0 );
 
 	// read in a line
-	copy_to_eoln(read_str, "\n", Mp, read_len);
+	copy_to_eoln(read_str, NULL, PARSE_BUF_SIZE);
 	drop_trailing_white_space(read_str);
-	advance_to_eoln("");
+	advance_to_eoln();
 	Mp++;
 
 	// now we want to do any final localization
-	lcl_ext_localize(read_str, outstr, final_len, &tag_id);
+	lcl_ext_localize(read_str, outstr, buf_size - 1, &tag_id);
 
 	// if the hash localized text hash table is active and we have a valid external string - hash it
 	if(fhash_active() && (tag_id > -2)){
@@ -1414,9 +1421,9 @@ void stuff_string_line(SCP_string &outstr)
 	int tag_id;
 
 	// read in a line
-	copy_to_eoln(read_str, "\n", Mp);
+	copy_to_eoln(read_str, NULL);
 	drop_trailing_white_space(read_str);
-	advance_to_eoln("");
+	advance_to_eoln();
 	Mp++;
 
 	// now we want to do any final localization
@@ -1430,10 +1437,8 @@ void stuff_string_line(SCP_string &outstr)
 	diag_printf("Stuffed string = [%.30s]\n", outstr.c_str());
 }
 
-// Exactly the same as stuff string only Malloc's the buffer. 
-//	Supports various FreeSpace primitive types.  If 'len' is supplied, it will override
-// the default string length if using the F_NAME case.
-char *stuff_and_malloc_string(int type, char *terminators)
+// Exactly the same as stuff string only Malloc's the buffer.
+char *stuff_and_malloc_string(int type, const char *terminators)
 {
 	SCP_string tmp_result;
 
@@ -1446,7 +1451,7 @@ char *stuff_and_malloc_string(int type, char *terminators)
 	return vm_strdup(tmp_result.c_str());
 }
 
-void stuff_malloc_string(char **dest, int type, char *terminators)
+void stuff_malloc_string(char **dest, int type, const char *terminators)
 {
 	Assert(dest != NULL); //wtf?
 	
@@ -1463,58 +1468,68 @@ void stuff_malloc_string(char **dest, int type, char *terminators)
 }
 
 // After reading a multitext string, you can call this function to convert any newlines into
-// spaces, so it's a one paragraph string (I.e. as in MS-Word).
+// spaces, so it's a one paragraph string (i.e. as in MS-Word).
 //
 void compact_multitext_string(char *str)
 {
-	unsigned int i;
-	unsigned int len = strlen(str);
-	int num_cr = 0;
+	char *p_dest = str;
+	char *p_src = str;
 
-	for (i=0; i<len; i++)
+	while (*p_src)
 	{
+		char ch = *p_src;
+		p_src++;
+
 		// skip CR
 		// convert LF to space
 		// copy characters backwards if any CRs previously encountered
-		if (str[i] == '\r')
-			num_cr++;
-		else if (str[i] == '\n')
-			str[i-num_cr] = ' ';
-		else if (num_cr > 0)
-			str[i-num_cr] = str[i];
+		if (ch != '\r')
+		{
+			if (ch == '\n')
+				*p_dest = ' ';
+			else if (p_dest != p_src)
+				*p_dest = *p_src;
+
+			p_dest++;
+		}
 	}
 
-	if (num_cr > 0)
-		str[len-num_cr] = 0;
+	if (p_dest != p_src)
+		*p_dest = 0;
 }
 
 // ditto for SCP_string
 void compact_multitext_string(SCP_string &str)
 {
-	unsigned int i;
-	unsigned int len = str.length();
-	int num_cr = 0;
+	SCP_string::iterator p_dest = str.begin();
+	SCP_string::iterator p_src = str.begin();
 
-	for (i=0; i<len; i++)
+	while (p_src != str.end())
 	{
+		char ch = *p_src;
+		p_src++;
+
 		// skip CR
 		// convert LF to space
 		// copy characters backwards if any CRs previously encountered
-		if (str[i] == '\r')
-			num_cr++;
-		else if (str[i] == '\n')
-			str[i-num_cr] = ' ';
-		else if (num_cr > 0)
-			str[i-num_cr] = str[i];
+		if (ch != '\r')
+		{
+			if (ch == '\n')
+				*p_dest = ' ';
+			else if (p_dest != p_src)
+				*p_dest = *p_src;
+
+			p_dest++;
+		}
 	}
 
-	if (num_cr > 0)
-		str.resize(len-num_cr);
+	if (p_dest != p_src)
+		str.erase(p_dest);
 }
 
 int maybe_convert_foreign_character(int ch)
 {
-	// time to do some special foreign character conversion			
+	// time to do some special foreign character conversion
 	switch (ch) {
 		case -4:
 			ch = 129;
@@ -1642,7 +1657,7 @@ void maybe_convert_foreign_characters(SCP_string &line)
 }
 
 // Goober5000
-int get_number_before_separator(char *text, char separator)
+int get_number_before_separator(const char *text, char separator)
 {
 	char buf[10];
 	char *ch;
@@ -1655,11 +1670,11 @@ int get_number_before_separator(char *text, char separator)
 		return 0;
 	*ch = '\0';
 
-	return atoi(buf);	
+	return atoi(buf);
 }
 
 // Goober5000
-int get_number_before_separator(SCP_string &text, char separator)
+int get_number_before_separator(const SCP_string &text, char separator)
 {
 	char buf[10];
 	char *ch;
@@ -1672,7 +1687,7 @@ int get_number_before_separator(SCP_string &text, char separator)
 		return 0;
 	*ch = '\0';
 
-	return atoi(buf);	
+	return atoi(buf);
 }
 
 // Strip comments from a line of input.
@@ -1909,7 +1924,7 @@ int parse_get_line(char *lineout, int max_line_len, char *start, int max_size, c
 //	When a comment is found, it is removed.  If an entire line
 //	consisted of a comment, a blank line is left in the input file.
 // Goober5000 - added ability to read somewhere other than Mission_text
-void read_file_text(const char *filename, int mode, char *processed_text, char *raw_text)
+void read_file_text(const char *filename, int mode, SCP_string &processed_text, SCP_string &raw_text)
 {
 	// copy the filename
 	if (!filename)
@@ -1964,7 +1979,7 @@ void read_file_text_from_array(const char *array, char *processed_text, char *ra
 }
 
 // Goober5000
-int is_unicode(char *text)
+int is_unicode(const char *text)
 {
 	if (!strncmp(text, "\xEF\xBB\xBF", 3))		// UTF-8
 		return 1;
@@ -1984,6 +1999,17 @@ int is_unicode(char *text)
 	return 0;
 }
 
+// Goober5000
+int is_unicode(const SCP_string &text)
+{
+	// get the first few characters
+	char buffer[5];
+	size_t len = text.copy(buffer, 4);
+	buffer[len] = '\0';
+
+	return is_unicode(buffer);
+}
+
 void stop_parse()
 {
 	Assert( !Parsing_paused );
@@ -2001,7 +2027,7 @@ void stop_parse()
 	Mission_text_size = 0;
 }
 
-void allocate_mission_text(int size)
+char *allocate_file_buffer(size_t size)
 {
 	Assert( size > 0 );
 
@@ -2107,7 +2133,7 @@ void read_raw_file_text(const char *filename, int mode, char *raw_text)
 }
 
 // Goober5000
-void process_raw_file_text(char *processed_text, char *raw_text)
+void process_raw_file_text(SCP_string &processed_text, SCP_string &raw_text)
 {
 	char	*mp;
 	char	*mp_raw;
@@ -2129,7 +2155,7 @@ void process_raw_file_text(char *processed_text, char *raw_text)
 
 	// strip comments from raw text, reading into file_text
 	int num_chars_read = 0;
-	while ( (num_chars_read = parse_get_line(outbuf, PARSE_BUF_SIZE, raw_text, raw_text_len, mp_raw)) != 0 ) {
+	while ( (num_chars_read = parse_get_line(outbuf, PARSE_BUF_SIZE - 1, raw_text, raw_text_len, mp_raw)) != 0 ) {
 		mp_raw += num_chars_read;
 
 		in_multiline_comment = strip_comments(outbuf, in_multiline_comment);
@@ -2441,7 +2467,7 @@ void stuff_boolean(bool *b, bool a_to_eol)
 	char token[32];
 	stuff_string_white(token, sizeof(token)/sizeof(char));
 	if(a_to_eol)
-		advance_to_eoln(NULL);
+		advance_to_eoln();
 
 	if( isdigit(token[0]))
 	{
@@ -3166,7 +3192,7 @@ void pause_parse()
 	if (Parsing_paused)
 		return;
 
-	Mp_save = Mp;
+	paused_Mp = Mp;
 
 	Warning_count_save = Warning_count;
 	Error_count_save = Error_count;
@@ -3183,7 +3209,7 @@ void unpause_parse()
 	if (!Parsing_paused)
 		return;
 
-	Mp = Mp_save;
+	Mp = paused_Mp;
 
 	Warning_count = Warning_count_save;
 	Error_count = Error_count_save;
@@ -3198,7 +3224,7 @@ void reset_parse(char *text)
 	if (text != NULL) {
 		Mp = text;
 	} else {
-		Mp = Mission_text;
+		Mp = Mission_text.begin();
 	}
 
 	Warning_count = 0;
@@ -3562,6 +3588,40 @@ int subsystem_stricmp(const char *str1, const char *str2)
 	return strnicmp(str1, str2, len1);
 }
 
+int SCP_stricmp(const SCP_string &str1, size_t pos1, size_t len1, const char *str2)
+{
+	SCP_string new_str1 = str1.substr(pos1, len1);
+	return stricmp(new_str1.c_str(), str2);
+}
+
+int SCP_stricmp(const SCP_string &str1, SCP_string::iterator pos1, size_t len1, const char *str2)
+{
+	return SCP_stricmp(str1, pos1 - str1.begin(), len1, str2);
+}
+
+int SCP_stricmp(const char *str1, const SCP_string &str2, size_t pos2, size_t len2)
+{
+	SCP_string new_str2 = str2.substr(pos2, len2);
+	return stricmp(str1, new_str2.c_str());
+}
+
+int SCP_stricmp(const char *str1, const SCP_string &str2, SCP_string::iterator pos2, size_t len2)
+{
+	return SCP_stricmp(str1, str2, pos2 - str2.begin(), len2);
+}
+
+int SCP_stricmp(const SCP_string &str1, size_t pos1, size_t len1, const SCP_string &str2, size_t pos2, size_t len2)
+{
+	SCP_string new_str1 = str1.substr(pos1, len1);
+	SCP_string new_str2 = str2.substr(pos2, len2);
+	return stricmp(new_str1.c_str(), new_str2.c_str());
+}
+
+int SCP_stricmp(const SCP_string &str1, SCP_string::iterator pos1, size_t len1, const SCP_string &str2, SCP_string::iterator pos2, size_t len2)
+{
+	return SCP_stricmp(str1, pos1 - str1.begin(), len1, str2, pos2 - str2.begin(), len2);
+}
+
 // Goober5000
 // current algorithm adapted from http://www.codeproject.com/string/stringsearch.asp
 const char *stristr(const char *str, const char *substr)
@@ -3659,6 +3719,101 @@ stristr_continue_outer_loop:
 
 	// no match
 	return NULL;
+}
+
+// Goober5000
+size_t stristr(const SCP_string &str, const char *substr, size_t startpos)
+{
+	// check for null and insanity
+	Assert(substr);
+	if (substr == NULL || *substr == '\0')
+		return SCP_string::npos;
+
+	// save both a lowercase and an uppercase version of the first character of substr
+	char substr_ch_lower = (char)tolower(*substr);
+	char substr_ch_upper = (char)toupper(*substr);
+
+	// find the maximum distance to search
+	SCP_string::iterator upper_bound = str.end() - strlen(substr);
+
+	// loop through every character of str
+	for (SCP_string::iterator start = str.begin() + startpos; start <= upper_bound; start++)
+	{
+		// check first character of substr
+		if ((*start == substr_ch_upper) || (*start == substr_ch_lower))
+		{
+			// first character matched, so check the rest
+			for (SCP_string::iterator str_ch = start+1, const char *substr_ch = substr+1; *substr_ch != '\0'; str_ch++, substr_ch++)
+			{
+				// character match?
+				if (*str_ch == *substr_ch)
+					continue;
+
+				// converted character match?
+				if (tolower(*str_ch) == tolower(*substr_ch))
+					continue;
+
+				// mismatch
+				goto stristr_continue_outer_loop;
+			}
+
+			// finished inner loop with success!
+			return (start - str.begin());
+		}
+
+stristr_continue_outer_loop:
+		/* NO-OP */ ;
+	}
+
+	// no match
+	return SCP_string::npos;
+}
+
+// Goober5000
+size_t stristr(const SCP_string &str, const SCP_string &substr, size_t startpos)
+{
+	// check for insanity
+	if (substr.length() == 0)
+		return SCP_string::npos;
+
+	// save both a lowercase and an uppercase version of the first character of substr
+	char substr_ch_lower = (char)tolower(substr[0]);
+	char substr_ch_upper = (char)toupper(substr[0]);
+
+	// find the maximum distance to search
+	SCP_string::iterator upper_bound = str.end() - substr.length();
+
+	// loop through every character of str
+	for (SCP_string::iterator start = str.begin() + startpos; start <= upper_bound; start++)
+	{
+		// check first character of substr
+		if ((*start == substr_ch_upper) || (*start == substr_ch_lower))
+		{
+			// first character matched, so check the rest
+			for (SCP_string::iterator str_ch = start+1, substr_ch = substr.begin()+1; substr_ch != substr.end(); str_ch++, substr_ch++)
+			{
+				// character match?
+				if (*str_ch == *substr_ch)
+					continue;
+
+				// converted character match?
+				if (tolower(*str_ch) == tolower(*substr_ch))
+					continue;
+
+				// mismatch
+				goto stristr_continue_outer_loop;
+			}
+
+			// finished inner loop with success!
+			return (start - str.begin());
+		}
+
+stristr_continue_outer_loop:
+		/* NO-OP */ ;
+	}
+
+	// no match
+	return SCP_string::npos;
 }
 
 // Goober5000
@@ -4043,44 +4198,41 @@ void backspace(char* src)
 }
 
 // Goober5000
-void format_integer_with_commas(char *buf, int integer, bool use_comma_with_four_digits)
+void format_integer_with_commas(char *dest, int integer, bool use_comma_with_four_digits)
 {
-	int old_pos, new_pos, triad_count;
-	char backward_buf[32];
+	char temp_dest[32];
 
 	// print an initial string of just the digits
-	sprintf(buf, "%d", integer);
+	sprintf(temp_dest, "%d", integer);
 
 	// no commas needed?
 	if ((integer < 1000) || (integer < 10000 && !use_comma_with_four_digits))
-		return;
-
-	// scan the string backwards, writing commas after every third digit
-	new_pos = 0;
-	triad_count = 0;
-	for (old_pos = strlen(buf) - 1; old_pos >= 0; old_pos--)
 	{
-		backward_buf[new_pos] = buf[old_pos];
-		new_pos++;
+		strcpy_s(buf, temp_buf);
+		return;
+	}
+
+	// see how much of a triad we have
+	int triad_count = strlen(temp_buf) % 3);
+	if (*temp_buf == '-' || *temp_buf == '+')
 		triad_count++;
 
-		if (triad_count == 3 && old_pos > 0)
+	// copy the string, writing commas after every third digit
+	char *ch = temp_buf;
+	while (*ch)
+	{
+		*dest = *ch++;
+		dest++;
+		triad_count--;
+
+		if (!triad_count && *ch)
 		{
-			backward_buf[new_pos] = ',';
-			new_pos++;
-			triad_count = 0;
+			*dest = ',';
+			dest++;
+			triad_count = 3;
 		}
 	}
-	backward_buf[new_pos] = '\0';
-
-	// now reverse the string
-	new_pos = 0;
-	for (old_pos = strlen(backward_buf) - 1; old_pos >= 0; old_pos--)
-	{
-		buf[new_pos] = backward_buf[old_pos];
-		new_pos++;
-	}
-	buf[new_pos] = '\0';
+	*dest = 0;
 }
 
 // Goober5000

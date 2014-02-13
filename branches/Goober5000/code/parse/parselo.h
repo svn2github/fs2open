@@ -18,13 +18,12 @@
 #include <cstdio>
 #include <string>
 
-// NOTE: although the main game doesn't need this anymore, FRED2 still does
-#define	MISSION_TEXT_SIZE	1000000
+extern SCP_string	Mission_text;
+extern SCP_string	Mission_text_raw;
+extern SCP_string::iterator	Mp;
+extern const SCP_string::iterator INVALID_MP;
 
-extern char	*Mission_text;
-extern char	*Mission_text_raw;
-extern char	*Mp;
-extern char	*token_found;
+extern const char	*token_found;
 extern int fred_parse_flag;
 extern int Token_found_flag;
 extern jmp_buf parse_abort;
@@ -96,48 +95,47 @@ extern void ignore_gray_space();
 // error
 extern int get_line_num();
 extern char *next_tokens();
-extern void diag_printf(char *format, ...);
-extern void error_display(int error_level, char *format, ...);
+extern void diag_printf(const char *format, ...);
+extern void error_display(int error_level, const char *format, ...);
 
 // skip
-extern int skip_to_string(char *pstr, char *end = NULL);
-extern int skip_to_start_of_string(char *pstr, char *end = NULL);
-extern int skip_to_start_of_string_either(char *pstr1, char *pstr2, char *end = NULL);
-extern void advance_to_eoln(char *terminators);
+extern int skip_to_string(const char *pstr, const char *end = NULL);
+extern int skip_to_start_of_string(const char *pstr, const char *end = NULL);
+extern int skip_to_start_of_string_either(const char *pstr1, const char *pstr2, const char *end = NULL);
+extern void advance_to_eoln(const char *terminators = NULL);
 extern void skip_token();
 
 // required
-extern int required_string(char *pstr);
+extern int required_string(const char *pstr);
 extern int optional_string(const char *pstr);
-extern int optional_string_either(char *str1, char *str2);
-extern int required_string_either(char *str1, char *str2);
-extern int required_string_3(char *str1, char *str2, char *str3);
-extern int required_string_4(char *str1, char *str2, char *str3, char *str4);
+extern int optional_string_either(const char *str1, const char *str2);
+extern int required_string_either(const char *str1, const char *str2);
+extern int required_string_3(const char *str1, const char *str2, const char *str3);
+extern int required_string_4(const char *str1, const char *str2, const char *str3, const char *str4);
 
 // stuff
-extern void copy_to_eoln(char *outstr, char *more_terminators, char *instr, int max);
-extern void copy_text_until(char *outstr, char *instr, char *endstr, int max_chars);
-extern void stuff_string_white(char *outstr, int len = 0);
-extern void stuff_string_until(char *outstr, char *endstr, int len = 0);
-extern void stuff_string(char *outstr, int type, int len, char *terminators = NULL);
-extern void stuff_string_line(char *outstr, int len);
+extern void copy_to_eoln(char *outstr, const char *more_terminators, size_t buf_size);
+extern void copy_text_until(char *outstr, const char *endstr, size_t buf_size);
+extern void stuff_string_white(char *outstr, size_t buf_size = 0);
+extern void stuff_string_until(char *outstr, const char *endstr, size_t buf_size = 0);
+extern void stuff_string(char *outstr, int type, size_t buf_size = 0, const char *terminators = NULL);
+extern void stuff_string_line(char *outstr, size_t buf_size);
 
 // SCP_string stuff
-extern void copy_to_eoln(SCP_string &outstr, char *more_terminators, char *instr);
-extern void copy_text_until(SCP_string &outstr, char *instr, char *endstr);
+extern void copy_to_eoln(SCP_string &outstr, const char *more_terminators);
+extern void copy_text_until(SCP_string &outstr, const char *endstr);
 extern void stuff_string_white(SCP_string &outstr);
-extern void stuff_string_until(SCP_string &outstr, char *endstr);
-extern void stuff_string(SCP_string &outstr, int type, char *terminators = NULL);
+extern void stuff_string_until(SCP_string &outstr, const char *endstr);
+extern void stuff_string(SCP_string &outstr, int type, const char *terminators = NULL);
 extern void stuff_string_line(SCP_string &outstr);
 
 //alloc
-extern char* alloc_block(char* startstr, char* endstr, int extra_chars = 0);
+extern char* alloc_block(const char* startstr, const char* endstr, size_t extra_chars = 0);
 
-// Exactly the same as stuff string only Malloc's the buffer. 
-//	Supports various FreeSpace primitive types.  If 'len' is supplied, it will override
-// the default string length if using the F_NAME case.
-extern char *stuff_and_malloc_string(int type, char *terminators = NULL);
-extern void stuff_malloc_string(char **dest, int type, char *terminators = NULL);
+// Exactly the same as stuff string only Malloc's the buffer.
+extern char *stuff_and_malloc_string(int type, const char *terminators = NULL);
+extern void stuff_malloc_string(char **dest, int type, const char *terminators = NULL);
+
 extern void stuff_float(float *f);
 extern int stuff_float_optional(float *f, bool raw = false);
 extern int stuff_int_optional(int *i, bool raw = false);
@@ -176,21 +174,19 @@ extern void parse_int_list(int *ilist, int size);
 
 
 // general
-extern void reset_parse(char *text = NULL);
+extern void reset_parse(const char *text = NULL);
 extern void display_parse_diagnostics();
 extern void pause_parse();
 extern void unpause_parse();
-// stop parsing, basically just free's up the memory from Mission_text and Mission_text_raw
+// stop parsing, basically just frees up the memory from Mission_text and Mission_text_raw
 extern void stop_parse();
 
 // utility
 extern void mark_int_list(int *ilp, int max_ints, int lookup_type);
 extern void compact_multitext_string(char *str);
 extern void compact_multitext_string(SCP_string &str);
-extern void read_file_text(const char *filename, int mode = CF_TYPE_ANY, char *processed_text = NULL, char *raw_text = NULL);
-extern void read_file_text_from_array(const char *array, char *processed_text = NULL, char *raw_text = NULL);
-extern void read_raw_file_text(const char *filename, int mode = CF_TYPE_ANY, char *raw_text = NULL);
-extern void process_raw_file_text(char *processed_text = NULL, char *raw_text = NULL);
+extern void read_file_text(const char *filename, int mode = CF_TYPE_ANY, SCP_string &processed_text = Mission_text, SCP_string &raw_text = Mission_text_raw);
+extern void read_file_text_from_array(const char *array, SCP_string &processed_text = Mission_text, SCP_string &raw_text = Mission_text_raw);
 extern void debug_show_mission_text();
 extern void convert_sexp_to_string(SCP_string &dest, int cur_node, int mode);
 char *split_str_once(char *src, int max_pixel_w);
@@ -198,23 +194,27 @@ int split_str(const char *src, int max_pixel_w, int *n_chars, const char **p_str
 int split_str(const char *src, int max_pixel_w, SCP_vector<int> &n_chars, SCP_vector<const char*> &p_str, char ignore_char);
 
 // fred
-extern int required_string_fred(char *pstr, char *end = NULL);
-extern int required_string_either_fred(char *str1, char *str2);
-extern int optional_string_fred(char *pstr, char *end = NULL, char *end2 = NULL);
+extern int required_string_fred(const char *pstr, const char *end = NULL);
+extern int required_string_either_fred(const char *str1, const char *str2);
+extern int optional_string_fred(const char *pstr, const char *end = NULL, const char *end2 = NULL);
 
 // Goober5000 - returns position of replacement or -1 for exceeded length (SCP_string variants return the result)
-extern int replace_one(char *str, char *oldstr, char *newstr, unsigned int max_len, int range = 0);
+extern int replace_one(char *str, const char *oldstr, const char *newstr, unsigned int max_len, int range = 0);
 extern SCP_string& replace_one(SCP_string& context, const SCP_string& from, const SCP_string& to);
 extern SCP_string& replace_one(SCP_string& context, const char* from, const char* to);
 
 // Goober5000 - returns number of replacements or -1 for exceeded length (SCP_string variants return the result)
-extern int replace_all(char *str, char *oldstr, char *newstr, unsigned int max_len, int range = 0);
+extern int replace_all(char *str, const char *oldstr, const char *newstr, unsigned int max_len, int range = 0);
 extern SCP_string& replace_all(SCP_string& context, const SCP_string& from, const SCP_string& to);
 extern SCP_string& replace_all(SCP_string& context, const char* from, const char* to);
 
 // Goober5000 (why is this not in the C library?)
 extern const char *stristr(const char *str, const char *substr);
 extern char *stristr(char *str, const char *substr);
+
+// Goober5000 (std::string has something like this but it's painful to use)
+extern size_t stristr(const SCP_string &str, const char *substr, size_t startpos = 0);
+extern size_t stristr(const SCP_string &str, const SCP_string &substr, size_t startpos = 0);
 
 // Goober5000 (ditto)
 extern bool can_construe_as_integer(const char *text);
@@ -225,6 +225,12 @@ extern void sprintf(SCP_string &dest, const char *format, ...);
 
 // Goober5000
 extern int subsystem_stricmp(const char *str1, const char *str2);
+extern int SCP_stricmp(const SCP_string &str1, size_t pos1, size_t len1, const char *str2);
+extern int SCP_stricmp(const SCP_string &str1, SCP_string::iterator pos1, size_t len1, const char *str2);
+extern int SCP_stricmp(const char *str1, const SCP_string &str2, size_t pos2, size_t len2);
+extern int SCP_stricmp(const char *str1, const SCP_string &str2, SCP_string::iterator pos2, size_t len2);
+extern int SCP_stricmp(const SCP_string &str1, size_t pos1, size_t len1, const SCP_string &str2, size_t pos2, size_t len2);
+extern int SCP_stricmp(const SCP_string &str1, SCP_string::iterator pos1, size_t len1, const SCP_string &str2, SCP_string::iterator pos2, size_t len2);
 
 //WMC - compares two strings, ignoring the last extension
 extern int strextcmp(const char *s1, const char *s2);

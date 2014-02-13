@@ -1095,7 +1095,7 @@ int parse_weapon(int subtype, bool replace)
 	}
 
 	//Remove @ symbol
-	//these used to be used to denote weapons that would
+	//these used to denote weapons that would
 	//only be parsed in demo builds
 	if ( fname[0] == '@' ) {
 		backspace(fname);

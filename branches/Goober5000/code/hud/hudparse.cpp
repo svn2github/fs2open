@@ -165,7 +165,7 @@ int parse_ship_start()
 void parse_hud_gauges_tbl(const char *filename)
 {
 	int i, rval;
-	char *saved_Mp = NULL;
+	SCP_string::iterator saved_Mp = INVALID_MP;
 
 	int colors[3] = {255, 255, 255};
 	color hud_color;
@@ -441,7 +441,7 @@ void parse_hud_gauges_tbl(const char *filename)
 				load_gauge(gauge_type, base_res[0], base_res[1], use_font, scale_gauge, &ship_classes, use_clr_p);
 			}
 
-			if ( saved_Mp && (saved_Mp == Mp) ) {
+			if ( (saved_Mp != INVALID_MP) && (saved_Mp == Mp) ) {
 				Mp++;
 			}
 
